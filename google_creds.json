@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "syllasort-438820",
+  "private_key_id": "bd4aaada2be115fabdf54d96c96670976a5ca589",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCwLOFdUAbydZdJ\nDayTgU0H2vbISQhE/po9XKqXCNhfwpMHKoSXxxI5oXCqP0VPf2gpPZoPYEsRwGq+\nfdxd7sl8P836FSHLLFr5q1sSJVu7355DXZhqjgASMXXuSZXJSuAHLuH8MUM52FqI\nZCUP/ub/tdWTC/W97De2B9TEvsRzLsWQe7acBTmwxgWCelCsx22iUbnhgg9zv70T\nNnpvaRhzL4Pi4foBzAYAPDQB3UcpAePGS4Lpot3AL3wN++J40ugt0gVBEtjDBYPF\ndiPPdNEVxcLCkOefDJpO7pzvkZr2sehw0JnK83X3If5rc0HRRBJvdtNctRMnaS2O\nDiptXzsbAgMBAAECggEADFjI3pJKOlnVZXBI5PmN3XwSCY1cwAEb7Cr/ZaBgEa4A\nQeNP8ZcpBtLyo2vVvrGOKj2/+03jVPYoRPtrI0Yl5shN9jXe7W9JXPAObOIjYLJW\nVCBOG0GibaP7wNx1W+scckRt4A/Px1ELXz2tf0Z9B/TFaA3RhiL08JPx7Gv2NqA1\ngpUWTxdN2fmX2nLTC8edszoi3qCTOhmZTRz1MaZIB1vFeFScncT0e6+h8WGaI/eq\n1YlfBYzWUv8tTeV4ZOCd0HgYb0ygi6NEb2vP23ALas3KKT984hunFgf3heVsH3Ma\nsXyBPQlilCJxMo4I3JrWw0rEZJJwOrr/W2zRLG/haQKBgQDxlKJlh1G620fYDJzb\n2sgfOYrCv5fMZQkMayq8MY/oSxOVyQWdjeulVhIxnlvwcvxEtLeXlYw0QbyaR4Wx\nUE05W1UPV/tPBym6ld1Zs5HyN66SFQ/q8FYyezMbp4SMsxRhrjSXez1MvpZDolLC\n7ffiPEo05tiQ6Al/T38jvM5j3QKBgQC6sNlvKz2PJjsis2qqkqSmtJaxFZKKQHDU\nSdX+3Nbru1JWxPgCeM4jNPFYciI46mzpvq96Wp4cJ3ibJwK+mXHbkwI7q9VjCZ9A\nXnU2ufY4Kqlj5d+fAthzNw2E2zMffnYAO+HOnO2kCUeZu9k9lY+qT/X1ZCV6xPZx\nvwXS851HVwKBgQCRx9vn4KzVUZYdLh9KHNA+535w3yU/VokLUXBMeKwaxZNgBBq7\nZPUapMH9504b34eT/mn7s2cT8cdaYmavBYJUZmUCCVnB6tSnn+AfTVl5DVjvFn6w\ni6+4btf8jC5UqYxXFcTu1JO9SBVtYvsGXowDndY57kQpzZxNky9p5Xm2kQKBgAEZ\nfY5cENbBAOQpbl1m07VvptuQJvbNflyhurLvlgx5Y/jC3DsXfw9SBoHg2ja/mrid\nuObdlcTQrrMrPablvHfwm7jCQFV+/wMgC0yxN7QI/EpsVi7Xk3LKRjgcGmb7FbLW\np3PSFMw8icFsC9GDCf+UzPwPBPF+K31sBJrDeI+tAoGAZ5h41g6ROUoIQSzzGip1\ncivFZI7Lu1z1v6pwAgRC6Hm27egaS1fb2CWAk5B9cg13TCCi+rqI7UwVv4XAaU2Z\nz19zKIDXff1JGCcy4r053bduc4lDFvhLmgz8dgT2Ww1MyHCAsdJuIZYEqXpHEzSt\n8uwo/bjXAChUtbWqnrOY5yE=\n-----END PRIVATE KEY-----\n",
+  "client_email": "vision-ocr-service-new@syllasort-438820.iam.gserviceaccount.com",
+  "client_id": "101751513103499356234",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/vision-ocr-service-new%40syllasort-438820.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

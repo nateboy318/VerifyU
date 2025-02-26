@@ -1,0 +1,1 @@
+export { IDScannerScreen } from './IDScannerScreen';
