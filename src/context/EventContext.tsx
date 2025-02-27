@@ -1,6 +1,9 @@
 import React, { createContext, useState, useContext, useEffect, ReactNode, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Event, Student } from '../types';
+import { Alert } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 // Storage keys
 const EVENTS_STORAGE_KEY = 'cardinalscanner_events';
@@ -27,6 +30,8 @@ interface EventContextType {
   removeStudentFromEvent: (eventId: string, studentId: string) => Promise<void>;
   clearAttendanceForEvent: (eventId: string) => Promise<void>;
   getAttendanceCountForToday: () => number;
+  exportAttendanceToCSV: (eventId: string) => string;
+  downloadCSV: (eventId: string) => Promise<void>;
 }
 
 // Create a default implementation that doesn't throw errors
@@ -40,7 +45,8 @@ const defaultEventContext: EventContextType = {
       id: '0',
       name: 'Default Event',
       attendanceCount: 0,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      attendees: []
     };
   },
   updateEvent: async () => {
@@ -70,6 +76,13 @@ const defaultEventContext: EventContextType = {
   getAttendanceCountForToday: () => {
     console.warn('getAttendanceCountForToday called outside of EventProvider');
     return 0;
+  },
+  exportAttendanceToCSV: () => {
+    console.warn('exportAttendanceToCSV called outside of EventProvider');
+    return '';
+  },
+  downloadCSV: async () => {
+    console.warn('downloadCSV called outside of EventProvider');
   }
 };
 
@@ -188,9 +201,13 @@ export const EventProvider = ({ children }: EventProviderProps) => {
     console.log('Creating new event:', eventData);
     const newEvent: Event = {
       id: generateId(),
-      ...eventData,
+      name: eventData.name,
+      location: eventData.location,
+      date: eventData.date,
+      description: eventData.description,
       attendanceCount: 0,
       createdAt: new Date().toISOString(),
+      attendees: []
     };
 
     setEvents((prevEvents) => [...prevEvents, newEvent]);
@@ -323,7 +340,7 @@ export const EventProvider = ({ children }: EventProviderProps) => {
     // Go through all events and count attendees scanned today
     events.forEach(event => {
       if (event.attendees) {
-        event.attendees.forEach(attendee => {
+        event.attendees.forEach((attendee: { scanTimestamp: string | number | Date; }) => {
           if (attendee.scanTimestamp) {
             const scanDate = new Date(attendee.scanTimestamp);
             scanDate.setHours(0, 0, 0, 0);
@@ -339,6 +356,36 @@ export const EventProvider = ({ children }: EventProviderProps) => {
     return todayCount;
   }, [events]);
 
+  const exportAttendanceToCSV = (eventId: string): string => {
+    const attendanceRecord = attendance.find(record => record.eventId === eventId);
+    if (!attendanceRecord) {
+      return '';
+    }
+
+    const students = attendanceRecord.students;
+    const csvRows = [
+      ['ID', 'Name', 'Timestamp'], // Header row
+      ...students.map(student => [student.id, student.name, student.timestamp.toISOString()]) // Data rows
+    ];
+
+    return csvRows.map(row => row.join(',')).join('\n');
+  };
+
+  const downloadCSV = async (eventId: string) => {
+    const csvData = exportAttendanceToCSV(eventId);
+    if (csvData) {
+        const fileUri = FileSystem.documentDirectory + `attendance_${eventId}.csv`;
+        await FileSystem.writeAsStringAsync(fileUri, csvData, {
+            encoding: FileSystem.EncodingType.UTF8,
+        });
+
+        // Share the file using Expo's Sharing API
+        await Sharing.shareAsync(fileUri);
+    } else {
+        Alert.alert('No attendance data found for this event.');
+    }
+  };
+
   const contextValue = {
     events,
     loading,
@@ -352,6 +399,8 @@ export const EventProvider = ({ children }: EventProviderProps) => {
     removeStudentFromEvent,
     clearAttendanceForEvent,
     getAttendanceCountForToday,
+    exportAttendanceToCSV,
+    downloadCSV,
   };
 
   console.log('EventProvider rendering with events:', events.length);

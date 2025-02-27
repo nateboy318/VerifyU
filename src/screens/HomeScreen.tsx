@@ -295,8 +295,8 @@ export const HomeScreen = () => {
           <View style={styles.header}>
             <View style={styles.headerContent}>
               <View>
-                <Text style={styles.greeting}>Welcome</Text>
-                <Text style={styles.subGreeting}>How are you today?</Text>
+                <Text style={styles.greeting}>VerifyU</Text>
+                <Text style={styles.subGreeting}>Closed Beta</Text>
               </View>
               <TouchableOpacity style={styles.profileButton}>
                 <Ionicons name="person-circle" size={40} color={COLORS.primary} />

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Alert, StatusBar, SafeAreaView, Image } from 'react-native';
-import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
+import { CameraView, CameraType, useCameraPermissions, FlashMode } from 'expo-camera';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useEvents } from '../../context/EventContext';
 import { useNoGoList } from '../../context/NoGoListContext';
@@ -23,6 +23,7 @@ export const IDScannerScreen = () => {
   const [facing, setFacing] = useState<CameraType>('back');
   const [scanning, setScanning] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
+  const [torchMode, setTorchMode] = useState<boolean>(false);
   const navigation = useNavigation() as any;
   const route = useRoute() as any;
   const eventId = route.params?.eventId;
@@ -295,6 +296,10 @@ export const IDScannerScreen = () => {
     );
   };
 
+  const toggleTorch = () => {
+    setTorchMode((prevMode) => !prevMode);
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -303,7 +308,7 @@ export const IDScannerScreen = () => {
         style={styles.camera} 
         facing={facing}
         ref={cameraRef}
-        
+        enableTorch={torchMode}
         ratio="16:9"
       >
         {/* Back Button */}
@@ -368,10 +373,12 @@ export const IDScannerScreen = () => {
             )}
           </TouchableOpacity>
           
+
           <TouchableOpacity 
             style={styles.helpButton}
+            onPress={toggleTorch}
           >
-            <Ionicons name="help-circle-outline" size={22} color={COLORS.white} />
+            <Ionicons name="flashlight-outline" size={22} color={COLORS.white} />
           </TouchableOpacity>
         </View>
       </CameraView>
@@ -567,5 +574,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 30,
-  }
+  },
+  torchButton: {
+    backgroundColor: COLORS.primary,
+    padding: 10,
+    borderRadius: 5,
+  },
+  torchButtonText: {
+    color: 'white',
+    fontSize: 16,
+  },
 });

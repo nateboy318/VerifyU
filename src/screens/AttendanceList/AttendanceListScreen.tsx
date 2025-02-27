@@ -42,7 +42,8 @@ export const AttendanceListScreen = () => {
     getAttendanceForEvent, 
     removeStudentFromEvent, 
     clearAttendanceForEvent,
-    loading 
+    loading,
+    downloadCSV
   } = useEvents();
   
   const event = eventId ? getEventById(eventId) : undefined;
@@ -151,6 +152,10 @@ export const AttendanceListScreen = () => {
     );
   };
 
+  const handleExportCSV = () => {
+    downloadCSV(eventId);
+  };
+
   const filteredStudents = students.filter((student: { name: string; id: string; }) => {
     const searchLower = searchText.toLowerCase();
     return (
@@ -158,10 +163,6 @@ export const AttendanceListScreen = () => {
       student.id.toLowerCase().includes(searchLower)
     );
   });
-
-  const exportAttendance = () => {
-    Alert.alert('Export Attendance', 'Attendance data will be exported (feature to be implemented)');
-  };
 
   // If no event ID was provided or event doesn't exist
   if (!eventId || !event) {
@@ -222,7 +223,7 @@ export const AttendanceListScreen = () => {
           {students.length > 0 && (
             <TouchableOpacity 
               style={styles.exportButton}
-              onPress={exportAttendance}
+              onPress={handleExportCSV}
             >
               <Ionicons name="share-outline" size={24} color={COLORS.white} />
             </TouchableOpacity>
