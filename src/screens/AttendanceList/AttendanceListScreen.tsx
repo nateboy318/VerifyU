@@ -199,7 +199,7 @@ export const AttendanceListScreen = () => {
       <StatusBar barStyle="light-content" />
       
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: COLORS.primary }]}>
         <View style={styles.headerContent}>
           <TouchableOpacity 
             style={styles.backButton}
@@ -391,8 +391,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   header: {
-    backgroundColor: COLORS.primary,
-    paddingTop: Platform.OS === 'ios' ? 10 : StatusBar.currentHeight ? StatusBar.currentHeight + 10 : 10,
+    paddingTop: Platform.OS === 'ios' ? 20 : StatusBar.currentHeight ? StatusBar.currentHeight + 10 : 10,
     paddingBottom: 15,
   },
   headerContent: {
@@ -403,7 +402,7 @@ const styles = StyleSheet.create({
   },
   headerTitleContainer: {
     flex: 1,
-    alignItems: 'center',
+    alignItems: 'flex-end',
   },
   headerTitle: {
     fontSize: SIZES.h2,

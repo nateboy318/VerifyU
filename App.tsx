@@ -13,6 +13,7 @@ import { CreateEventScreen } from './src/screens/CreateEvent/CreateEventScreen';
 import { AttendanceProvider } from './src/context/AttendanceContext';
 import { EventProvider } from './src/context/EventContext';
 import { COLORS } from './src/constants/theme';
+import { NoGoListProvider } from '~/context/NoGoListContext';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -30,6 +31,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
+      <NoGoListProvider>
       <EventProvider>
         <AttendanceProvider>
           <NavigationContainer>
@@ -54,6 +56,7 @@ export default function App() {
           </NavigationContainer>
         </AttendanceProvider>
       </EventProvider>
+      </NoGoListProvider>
     </SafeAreaProvider>
   );
 }

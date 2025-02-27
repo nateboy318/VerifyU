@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Alert, StatusBar,
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useEvents } from '../../context/EventContext';
+import { useNoGoList } from '../../context/NoGoListContext';
 import { COLORS, SIZES, SHADOWS } from '../../constants/theme';
 import * as FileSystem from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -29,6 +30,7 @@ export const IDScannerScreen = () => {
   const cameraRef = useRef<CameraView>(null);
   const [ocrProgress, setOcrProgress] = useState<string>('');
   const [croppedPhoto, setCroppedPhoto] = useState<string | null>(null);
+  const { isOnNoGoList } = useNoGoList();
 
   const event = eventId ? getEventById(eventId) : undefined;
 
@@ -216,6 +218,26 @@ export const IDScannerScreen = () => {
         return;
       }
 
+      // Check if the person is on the no-go list
+      if (isOnNoGoList(name)) {
+        Alert.alert(
+          '⚠️ NO ENTRY',
+          `${name} is on the no-go list and should not be admitted.`,
+          [
+            { 
+              text: 'OK', 
+              style: 'cancel',
+              onPress: () => {
+                setScanning(false);
+                setOcrProgress('');
+                setCroppedPhoto(null);
+              }
+            }
+          ]
+        );
+        return;
+      }
+
       // Create student object
       const student: Student = {
         id,
@@ -281,7 +303,7 @@ export const IDScannerScreen = () => {
         style={styles.camera} 
         facing={facing}
         ref={cameraRef}
-        facing={facing}
+        
         ratio="16:9"
       >
         {/* Back Button */}

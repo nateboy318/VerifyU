@@ -18,6 +18,7 @@ import { COLORS, SIZES, SHADOWS } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useEvents } from '../context/EventContext';
 import { getEventEmoji } from '../utils/emojiUtils';
+import { useNoGoList } from '../context/NoGoListContext';
 
 // Helper function to format dates to mm/dd/yy x:xxpm/am
 const formatDate = (dateString: string | undefined): string => {
@@ -139,7 +140,7 @@ const SpecialistBox = ({ title, count, icon, color, onPress }: SpecialistBoxProp
         <Text style={styles.specialistTitle}>{title}</Text>
       </View>
       <View style={[styles.specialistIcon, { backgroundColor: color }]}>
-        <Ionicons name={icon} size={24} color={COLORS.white} />
+        <Ionicons name={icon} size={20} color={COLORS.white} />
       </View>
     </View>
   </TouchableOpacity>
@@ -232,9 +233,11 @@ export const HomeScreen = () => {
     }
   };
 
+  const { importNoGoList } = useNoGoList();
+
   if (loading) {
     return (
-      <View style={[styles.container, styles.centerContent]}>
+      <View style={[styles.container]}>
         <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={styles.loadingText}>Loading dashboard...</Text>
       </View>
@@ -243,7 +246,7 @@ export const HomeScreen = () => {
 
   if (error) {
     return (
-      <View style={[styles.container, styles.centerContent]}>
+      <View style={[styles.container]}>
         <Ionicons name="alert-circle-outline" size={64} color={COLORS.primary} />
         <Text style={styles.errorTitle}>Something went wrong</Text>
         <Text style={styles.errorMessage}>
@@ -292,7 +295,7 @@ export const HomeScreen = () => {
           <View style={styles.header}>
             <View style={styles.headerContent}>
               <View>
-                <Text style={styles.greeting}>Hello, {userName}</Text>
+                <Text style={styles.greeting}>Welcome</Text>
                 <Text style={styles.subGreeting}>How are you today?</Text>
               </View>
               <TouchableOpacity style={styles.profileButton}>
@@ -308,7 +311,7 @@ export const HomeScreen = () => {
             contentContainerStyle={styles.contentContainer}
           >
             {/* Stats Section */}
-            <View style={styles.statsGrid}>
+            {/* <View style={styles.statsGrid}>
               <StatBox 
                 icon="scan-outline" 
                 title="Scanned Today" 
@@ -321,13 +324,11 @@ export const HomeScreen = () => {
                 value={events.length.toString()} 
                 color={COLORS.secondary} 
               />
-            </View>
+            </View> */}
             
             {/* Next Up Event Section */}
             <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Next Up</Text>
-              </View>
+              
               
               {nextEvent ? (
                 <View style={styles.nextEventContainer}>
@@ -348,7 +349,7 @@ export const HomeScreen = () => {
                     style={styles.nextEventButton}
                     onPress={() => isNavigationReady && navigation.navigate('AttendanceList', { eventId: nextEvent.id })}
                   >
-                    <Text style={styles.nextEventButtonText}>View Details</Text>
+                    <Text style={styles.nextEventButtonText}>View Attendance</Text>
                     <Ionicons name="arrow-forward" size={16} color={COLORS.white} />
                   </TouchableOpacity>
                 </View>
@@ -368,7 +369,7 @@ export const HomeScreen = () => {
 
             <View style={styles.sectionContainer}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Shortcuts</Text>
+                <Text style={styles.sectionTitle}>Actions</Text>
 
               </View>
               
@@ -377,7 +378,7 @@ export const HomeScreen = () => {
                   title="Scan IDs"
                   count={events.length}
                   icon="scan-outline"
-                  color={COLORS.primary}
+                  color={COLORS.secondary}
                   onPress={handleScanPress}
                 />
                 <SpecialistBox 
@@ -386,6 +387,22 @@ export const HomeScreen = () => {
                   icon="add-circle-outline"
                   color={COLORS.secondary}
                   onPress={() => isNavigationReady && navigation.navigate('CreateEvent')}
+                />
+                <SpecialistBox 
+                  title="View Events"
+                  count={events.length}
+                  icon="calendar-outline"
+                  color={COLORS.secondary}
+                  onPress={() => isNavigationReady && navigation.navigate('EventList')}
+                />
+                <SpecialistBox 
+                  title="No-Go List"
+                  count={0}
+                  icon="list-outline"
+                  color={COLORS.primary}
+                  onPress={() => {
+                    importNoGoList();
+                  }}
                 />
               </View>
             </View>
@@ -573,7 +590,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    ...SHADOWS.light,
+    ...SHADOWS.medium,
      borderWidth: 0,
     borderColor: COLORS.primary,
   },
@@ -604,7 +621,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: COLORS.white,
     borderRadius: 8,
-    ...SHADOWS.light,
+    ...SHADOWS.medium,
   },
   emptyEventsText: {
     fontSize: 16,
@@ -624,15 +641,18 @@ const styles = StyleSheet.create({
   },
   specialistsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 12,
   },
   specialistBox: {
     width: '48%',
     backgroundColor: COLORS.white,
     borderRadius: 8,
     padding: 16,
-    ...SHADOWS.light,
-    marginBottom: 12,
+    ...SHADOWS.medium,
+    marginBottom: 0,
   },
   specialistContent: {
     flexDirection: 'row',
@@ -651,7 +671,7 @@ const styles = StyleSheet.create({
   specialistIcon: {
     width: 30,
     height: 30,
-    borderRadius: 10,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -758,7 +778,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: COLORS.white,
     borderRadius: 8,
-    ...SHADOWS.light,
+    ...SHADOWS.medium,
     borderWidth: 0,
     borderColor: COLORS.primary,
   },
@@ -772,7 +792,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginRight: 12,
     width: 150,
-    ...SHADOWS.light,
+    ...SHADOWS.medium,
   },
   horizontalEventIconContainer: {
     width: 32,

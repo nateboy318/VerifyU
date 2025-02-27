@@ -1,6 +1,7 @@
 import * as FileSystem from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Student } from '../types';
+import nlp from 'compromise';
 
 // Import credentials
 const credentials = require('../../google_creds.json');
@@ -13,14 +14,106 @@ interface TextAnnotation {
     };
 }
 
+interface NameCandidate {
+    text: string;
+    confidence: number;
+}
+
+const COMMON_TITLES = ['student', 'id', 'card', 'university', 'college', 'school'];
+const NAME_INDICATORS = ['name:', 'student:', 'student name:'];
+const ID_INDICATORS = ['id:', 'id#:', 'student id:', 'number:'];
+
+// Helper functions outside the class
+async function readFile(path: string) {
+    const content = await FileSystem.readAsStringAsync(path);
+    return content;
+}
+
+async function fileExists(path: string) {
+    const info = await FileSystem.getInfoAsync(path);
+    return info.exists;
+}
+
 /**
  * Service class for handling interactions with Google Cloud Vision API
  */
 export class VisionService {
-    // Your Google Cloud Vision API key
-    // For demo, we'll use a simpler approach with an API key
-    private static readonly API_KEY = 'AIzaSyDhdKl9outmUUPrDGgbtChye0nmMNFe4fA'; // User's API key
+    private static readonly API_KEY = 'AIzaSyDhdKl9outmUUPrDGgbtChye0nmMNFe4fA';
     private static readonly API_URL = 'https://vision.googleapis.com/v1/images:annotate';
+
+    private static analyzeNameCandidates(blocks: string[]): NameCandidate[] {
+        const candidates: NameCandidate[] = [];
+        
+        for (const text of blocks) {
+            const line = text.trim();
+            if (!line || line.length < 4 || line.length > 50) continue;
+            
+            let confidence = 0;
+            const doc = nlp(line);
+            
+            // Use NLP to identify person names
+            const hasPersonName = doc.match('#Person+').found;
+            if (hasPersonName) confidence += 0.5;
+            
+            // Check for name indicators
+            if (NAME_INDICATORS.some(indicator => 
+                line.toLowerCase().includes(indicator))) {
+                confidence += 0.4;
+            }
+            
+            // Check proper case formatting
+            const words = line.split(' ');
+            const isProperCase = words.every(word => 
+                word.length > 0 && 
+                word[0] === word[0].toUpperCase() && 
+                word.slice(1).toLowerCase() === word.slice(1)
+            );
+            if (isProperCase) confidence += 0.3;
+            
+            // Skip lines with common titles
+            if (words.some(word => COMMON_TITLES.includes(word.toLowerCase()))) continue;
+            
+            // Check word count (most names are 2-3 words)
+            if (words.length >= 2 && words.length <= 3) confidence += 0.2;
+            
+            // Check for only letters and basic punctuation
+            if (!/[^A-Za-z\s\.-]/.test(line)) confidence += 0.2;
+            
+            candidates.push({ text: line, confidence });
+        }
+        
+        return candidates.sort((a, b) => b.confidence - a.confidence);
+    }
+
+    private static analyzeIdCandidates(text: string): string[] {
+        const doc = nlp(text);
+        const candidates: string[] = [];
+        
+        // Look for patterns that might indicate an ID
+        const idPatterns = [
+            /ID\s*#\s*(\d{5,12})/i,
+            /STUDENT\s+ID[:#\s-]*(\d{5,12})/i,
+            /ID\s*NUMBER[:#\s-]*(\d{5,12})/i,
+            /ID[:#\s-]*(\d{5,12})/i,
+            /(\d{7,10})/  // fallback for just numbers of appropriate length
+        ];
+        
+        // First try to find IDs near ID indicators
+        doc.match('(id|student id|identification) (number|#|no)? [0-9]{5,12}').forEach(match => {
+            const numbers = match.text.match(/\d+/);
+            if (numbers) candidates.push(numbers[0]);
+        });
+        
+        // Then try regular expressions
+        for (const pattern of idPatterns) {
+            const match = text.match(pattern);
+            if (match && match[1]) {
+                candidates.push(match[1].replace(/[^\d]/g, ''));
+            }
+        }
+        
+        return [...new Set(candidates)]; // Remove duplicates
+    }
 
     /**
      * Process an image with Google Cloud Vision OCR
@@ -30,305 +123,66 @@ export class VisionService {
     static async processImage(imageUri: string): Promise<Partial<Student>> {
         try {
             console.log('⚠️ VisionService: Starting image processing...');
-            console.log('📷 Original image URI:', imageUri);
 
-            // IMPORTANT: No contrast or brightness operations here!
-            // Only using resize and compression which are supported
-            console.log('🔄 About to call ImageManipulator with ONLY resize operation');
-
+            // Process the image
             const processedImage = await ImageManipulator.manipulateAsync(
                 imageUri,
-                [
-                    { resize: { width: 1200 } } // Only using resize, no contrast or brightness
-                ],
+                [{ resize: { width: 1200 } }],
                 { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG, base64: true }
             );
 
-            console.log('✅ Image manipulation completed successfully');
-
             if (!processedImage.base64) {
-                throw new Error('Failed to get base64 data from the image');
+                throw new Error('Failed to get base64 data from image');
             }
 
-            console.log('🔍 Processed image width:', processedImage.width);
-            console.log('🔍 Processed image height:', processedImage.height);
-            console.log('📡 Making Vision API request...');
+            // Prepare the request to Google Cloud Vision API
+            const requestBody = {
+                requests: [{
+                    image: {
+                        content: processedImage.base64
+                    },
+                    features: [{
+                        type: 'TEXT_DETECTION'
+                    }]
+                }]
+            };
 
-            // Make request to Vision API
-            const response = await this.makeVisionApiRequest(processedImage.base64);
+            // Make the API request
+            const response = await fetch(`${this.API_URL}?key=${this.API_KEY}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody)
+            });
 
-            // Extract and parse text from response
-            return this.parseOcrResult(response);
+            const result = await response.json();
+            console.log('📝 Google Vision API result:', result);
+
+            // Extract text blocks
+            const fullText = result.responses[0]?.fullTextAnnotation?.text || '';
+            const lines = fullText.split('\n').map(line => line.trim());
+
+            // Analyze name candidates
+            const nameCandidates = this.analyzeNameCandidates(lines);
+            console.log('👤 Name candidates:', nameCandidates);
+
+            // Analyze ID candidates
+            const idCandidates = this.analyzeIdCandidates(fullText);
+            console.log('🔢 ID candidates:', idCandidates);
+
+            const bestNameMatch = nameCandidates.length > 0 ? nameCandidates[0].text : null;
+            const bestIdMatch = idCandidates[0];
+
+            return {
+                id: bestIdMatch || `ID-${Date.now()}`,
+                name: bestNameMatch || 'Unknown Student',
+                timestamp: new Date()
+            };
+
         } catch (error) {
-            console.error('❌ Vision API Error:', error);
-            console.error('🔎 Error details:', JSON.stringify(error));
+            console.error('❌ Error processing image:', error);
             throw error;
         }
-    }
-
-    /**
-     * Make a request to the Google Cloud Vision API
-     * @param base64Image Base64 encoded image
-     * @returns API response
-     */
-    private static async makeVisionApiRequest(base64Image: string) {
-        const requestBody = {
-            requests: [
-                {
-                    image: {
-                        content: base64Image
-                    },
-                    features: [
-                        {
-                            type: 'TEXT_DETECTION',
-                            maxResults: 30
-                        },
-                        {
-                            type: 'DOCUMENT_TEXT_DETECTION',
-                            maxResults: 30
-                        }
-                    ]
-                }
-            ]
-        };
-
-        console.log('🌐 Sending request to Vision API...');
-
-        const response = await fetch(`${this.API_URL}?key=${this.API_KEY}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            console.error('🚨 Vision API error response:', data);
-            throw new Error(data.error?.message || 'Failed to process image with Vision API');
-        }
-
-        console.log('✅ Vision API response received successfully');
-        return data;
-    }
-
-    /**
-     * Parse the OCR result to extract student information
-     * @param apiResponse Response from the Vision API
-     * @returns Extracted student information
-     */
-    private static parseOcrResult(apiResponse: any): Partial<Student> {
-        // First try the document text detection result (better for structured documents)
-        const docTextAnnotations = apiResponse.responses[0]?.fullTextAnnotation?.text;
-        // Then try the regular text detection
-        const textAnnotations = apiResponse.responses[0]?.textAnnotations as TextAnnotation[] || [];
-
-        if ((!textAnnotations || textAnnotations.length === 0) && !docTextAnnotations) {
-            throw new Error('No text detected in the image');
-        }
-
-        // The first item contains the full text
-        const fullText = docTextAnnotations || (textAnnotations[0]?.description || '');
-        console.log('📝 Extracted full text:', fullText);
-
-        // Get all detected words for analysis
-        const allWords = textAnnotations.slice(1).map((annotation: TextAnnotation) => annotation.description);
-        console.log('🔤 All detected words count:', allWords.length);
-        if (allWords.length > 0) {
-            console.log('🔤 Sample words:', allWords.slice(0, 10).join(', '));
-        }
-
-        // Default values
-        let id = `ID-${Date.now()}`;
-        let name = ''; // Start with empty name
-
-        // ID EXTRACTION - PRIORITIZE ID# PATTERN
-        // First check specifically for "ID#" pattern as mentioned by user
-        const idNumberPatterns = [
-            /ID\s*#\s*(\d+)/i,               // Matches: ID#12345, ID #12345, ID# 12345
-            /ID\s*NUMBER\s*#?\s*(\d+)/i,      // Matches: ID NUMBER 12345, ID NUMBER#12345
-            /ID\s*NO\.?\s*#?\s*(\d+)/i,       // Matches: ID NO #12345, ID NO. 12345
-            /ID\s*[:=]\s*(\d+)/i,             // Matches: ID: 12345, ID=12345
-            /ID\s*([\d-]+)/i,                 // Matches: ID 123-45-6789, ID 123456789
-            /STUDENT\s*ID\s*#?\s*(\d+)/i,     // Matches: STUDENT ID 12345
-            /NO\.?\s*(\d+)/i,                 // Matches: NO. 12345, NO 12345
-            /NUMBER\s*[:=]?\s*(\d+)/i         // Matches: NUMBER: 12345, NUMBER=12345
-        ];
-
-        // Try each ID pattern in priority order
-        let foundId = false;
-        for (const pattern of idNumberPatterns) {
-            const match = fullText.match(pattern);
-            if (match && match[1]) {
-                id = match[1].replace(/[^\d]/g, ''); // Clean up, keep only digits
-                console.log(`🎯 Found ID using pattern ${pattern}: ${id}`);
-                foundId = true;
-                break;
-            }
-        }
-
-        // If no ID found with specific patterns, look for sequences of digits
-        if (!foundId) {
-            console.log('⚠️ No specific ID pattern matched, looking for digit sequences...');
-
-            // Split text into lines for more targeted searching
-            const lines = fullText.split('\n');
-
-            // First try to find lines containing ID indicators
-            for (const line of lines) {
-                if (/ID|NUMBER|NO\.?/i.test(line)) {
-                    console.log('📍 Found line with ID indicator:', line);
-
-                    // Extract all digit sequences from this line
-                    const digitMatches = line.match(/\d+/g);
-                    if (digitMatches && digitMatches.length > 0) {
-                        // Use the longest digit sequence in this line
-                        const longestDigitMatch = digitMatches.reduce((longest: string, current: string) =>
-                            current.length > longest.length ? current : longest, '');
-
-                        if (longestDigitMatch.length >= 5) { // Most IDs are at least 5 digits
-                            id = longestDigitMatch;
-                            console.log('🔢 Found ID in line with ID indicator:', id);
-                            foundId = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // If still no ID, look for any digit sequence that looks like an ID
-            if (!foundId) {
-                const digitSequences = fullText.match(/\d{5,12}/g); // Most IDs are 5-12 digits
-                if (digitSequences && digitSequences.length > 0) {
-                    id = digitSequences[0]; // Use the first substantial digit sequence
-                    console.log('⚠️ Falling back to first substantial digit sequence as ID:', id);
-                }
-            }
-        }
-
-        console.log('🆔 Final extracted ID:', id);
-
-        // Split text into lines for better analysis
-        const lines = fullText.split('\n');
-        console.log('📊 Total lines in text:', lines.length);
-
-        // Print each line for debugging
-        lines.forEach((line: string, index: number) => {
-            console.log(`📌 Line ${index + 1}: "${line}"`);
-        });
-
-        // APPROACH 1: Look for name on lines after keywords like "NAME" or "STUDENT"
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
-
-            // Check for explicit name labels
-            if (/^(?:STUDENT|NAME)[:]\s*(.+)/i.test(line)) {
-                const nameMatch = line.match(/^(?:STUDENT|NAME)[:]\s*(.+)/i);
-                if (nameMatch && nameMatch[1]) {
-                    name = nameMatch[1].trim();
-                    console.log('✅ Found name with explicit label:', name);
-                    break;
-                }
-            }
-
-            // Check if current line has a name label but the value is on the next line
-            if (/^(?:STUDENT|NAME)[:]?\s*$/i.test(line) && i + 1 < lines.length) {
-                const nextLine = lines[i + 1].trim();
-                if (nextLine.length > 2 && !/^ID|UNIVERSITY|COLLEGE|NUMBER/i.test(nextLine)) {
-                    name = nextLine;
-                    console.log('✅ Found name on line after label:', name);
-                    break;
-                }
-            }
-        }
-
-        // APPROACH 2: Look for typical name patterns (2-3 capitalized words)
-        if (!name) {
-            const namePatterns = [
-                // Fairly strict name pattern: 2-3 capitalized words
-                /([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})/g,
-                // Less strict name pattern
-                /([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){1,2})/g
-            ];
-
-            for (const pattern of namePatterns) {
-                const nameMatches = fullText.match(pattern);
-                if (nameMatches && nameMatches.length > 0) {
-                    console.log('🔍 Name pattern matches:', nameMatches);
-
-                    // Exclude common non-name phrases
-                    const possibleNames = nameMatches.filter((match: string) =>
-                        !/STUDENT ID|UNIVERSITY|COLLEGE|CARD|ISSUE|VALID|EXPIRE/i.test(match)
-                    );
-
-                    if (possibleNames.length > 0) {
-                        name = possibleNames[0]; // Use the first match as most likely
-                        console.log('✅ Found name with pattern:', name);
-                        break;
-                    }
-                }
-            }
-        }
-
-        // APPROACH 3: Try using allWords to find consecutive capitalized words
-        if (!name && allWords.length > 1) {
-            console.log('🔍 Trying to find name from individual words...');
-
-            let nameWords: string[] = [];
-            for (let i = 0; i < allWords.length; i++) {
-                const word = allWords[i];
-                // Check if this word looks like part of a name
-                if (word.length > 1 &&
-                    /^[A-Z][a-z]+$/.test(word) &&
-                    !/^(THE|AND|FOR|ID|CARD|STUDENT|SCHOOL|UNIVERSITY|COLLEGE)$/i.test(word)) {
-
-                    nameWords.push(word);
-                    console.log(`👀 Possible name word: ${word}, current sequence: ${nameWords.join(' ')}`);
-
-                    // If we have 2-3 words, treat as a full name
-                    if (nameWords.length >= 2 && nameWords.length <= 3) {
-                        name = nameWords.join(' ');
-                        console.log('✅ Constructed name from words:', name);
-                        break;
-                    }
-                } else {
-                    // Reset if we encounter a non-name word
-                    if (nameWords.length > 0) {
-                        console.log(`🔄 Resetting name words sequence at word: ${word}`);
-                        nameWords = [];
-                    }
-                }
-            }
-        }
-
-        // APPROACH 4: Last resort - take a reasonable line
-        if (!name && lines.length > 0) {
-            console.log('🔍 Trying to find name from lines...');
-
-            for (const line of lines) {
-                // A name usually has spaces, isn't too short or too long, and doesn't contain common non-name words
-                if (line.length > 3 && line.length < 30 &&
-                    line.includes(' ') &&
-                    !/ID|UNIVERSITY|COLLEGE|CARD|ISSUE|VALID|EXPIRE/i.test(line)) {
-                    name = line.trim();
-                    console.log('✅ Using first reasonable line as name:', name);
-                    break;
-                }
-            }
-        }
-
-        // If all else fails, use a default
-        if (!name) {
-            name = `Student ${id.substr(-4)}`;
-            console.log('⚠️ Using default name with ID suffix');
-        }
-
-        console.log('✅ Final extracted data - ID:', id, 'Name:', name);
-        return {
-            id,
-            name,
-            timestamp: new Date()
-        };
     }
 } 

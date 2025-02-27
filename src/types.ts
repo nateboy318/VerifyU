@@ -1,3 +1,5 @@
+import { NavigatorScreenParams } from '@react-navigation/native';
+
 export interface Student {
   id: string;
   name: string;
@@ -23,4 +25,5 @@ export interface RootStackParamList {
   AttendanceList: { eventId?: string };
   EventList: undefined;
   CreateEvent: undefined;
+  [key: string]: undefined | { eventId?: string };
 }
