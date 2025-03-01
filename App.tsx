@@ -1,62 +1,60 @@
 import React from 'react';
+import { LogBox } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { StatusBar } from 'expo-status-bar';
+import { Alert } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, Text, Platform } from 'react-native';
-import { RootStackParamList } from './src/types';
+
+// Import providers
+import { EventProvider } from './src/context/EventContext';
+import { AttendanceProvider } from './src/context/AttendanceContext';
+import { NoGoListProvider } from './src/context/NoGoListContext';
+
+// Import screens directly
 import { HomeScreen } from './src/screens/HomeScreen';
 import { IDScannerScreen } from './src/screens/IDScanner/IDScannerScreen';
 import { AttendanceListScreen } from './src/screens/AttendanceList/AttendanceListScreen';
 import { EventListScreen } from './src/screens/EventList/EventListScreen';
 import { CreateEventScreen } from './src/screens/CreateEvent/CreateEventScreen';
-import { AttendanceProvider } from './src/context/AttendanceContext';
-import { EventProvider } from './src/context/EventContext';
-import { COLORS } from './src/constants/theme';
-import { NoGoListProvider } from '~/context/NoGoListContext';
+import { NoGoListScreen } from './src/screens/NoGoList/NoGoListScreen';
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
+// Ignore specific harmless warnings
+LogBox.ignoreLogs([
+  'Non-serializable values were found in the navigation state',
+  'Require cycle:'
+]);
 
-export default function App() {
-  // Simple fallback component in case the camera causes issues
-  const CameraSafeFallback = () => (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
-      <Text style={{ fontSize: 18, color: COLORS.primary, textAlign: 'center', margin: 20 }}>
-        The camera feature would be enabled on a real device.
-        {'\n\n'}
-        For this demo, IDs will be generated using sample data.
-      </Text>
-    </View>
-  );
+// Create stack navigator without typing constraints
+const Stack = createNativeStackNavigator();
 
+// Simple App component with minimal wrapping
+const App = () => {
   return (
     <SafeAreaProvider>
       <NoGoListProvider>
-      <EventProvider>
-        <AttendanceProvider>
-          <NavigationContainer>
-            <StatusBar style="light" backgroundColor={COLORS.primary} />
-            <Stack.Navigator 
-              initialRouteName="Home"
-              screenOptions={{
-                headerShown: false,
-                contentStyle: { backgroundColor: COLORS.background },
-                animation: 'fade_from_bottom',
-              }}
-            >
-              <Stack.Screen name="Home" component={HomeScreen} />
-              <Stack.Screen 
-                name="IDScanner" 
-                component={Platform.OS === 'web' ? CameraSafeFallback : IDScannerScreen} 
-              />
-              <Stack.Screen name="AttendanceList" component={AttendanceListScreen} />
-              <Stack.Screen name="EventList" component={EventListScreen} />
-              <Stack.Screen name="CreateEvent" component={CreateEventScreen} />
-            </Stack.Navigator>
-          </NavigationContainer>
-        </AttendanceProvider>
-      </EventProvider>
+        <EventProvider>
+          <AttendanceProvider>
+            <NavigationContainer>
+              <Stack.Navigator 
+                initialRouteName="Home"
+                screenOptions={{ 
+                  headerShown: false,
+                  contentStyle: { backgroundColor: 'white' }
+                }}
+              >
+                <Stack.Screen name="Home" component={HomeScreen} />
+                <Stack.Screen name="IDScanner" component={IDScannerScreen} />
+                <Stack.Screen name="AttendanceList" component={AttendanceListScreen} />
+                <Stack.Screen name="EventList" component={EventListScreen} />
+                <Stack.Screen name="CreateEvent" component={CreateEventScreen} />
+                <Stack.Screen name="NoGoList" component={NoGoListScreen} /> 
+              </Stack.Navigator>
+            </NavigationContainer>
+          </AttendanceProvider>
+        </EventProvider>
       </NoGoListProvider>
     </SafeAreaProvider>
   );
-}
+};
+
+export default App; 

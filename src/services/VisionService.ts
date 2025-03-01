@@ -99,10 +99,10 @@ export class VisionService {
         ];
         
         // First try to find IDs near ID indicators
-        doc.match('(id|student id|identification) (number|#|no)? [0-9]{5,12}').forEach(match => {
-            const numbers = match.text.match(/\d+/);
-            if (numbers) candidates.push(numbers[0]);
-        });
+        const matches = text.match(/(id|student id|identification)\s*(number|#|no)?\s*([0-9]{5,12})/i);
+        if (matches && matches[3]) {
+            candidates.push(matches[3]);
+        }
         
         // Then try regular expressions
         for (const pattern of idPatterns) {
@@ -112,7 +112,8 @@ export class VisionService {
             }
         }
         
-        return [...new Set(candidates)]; // Remove duplicates
+        // Convert to array and remove duplicates using Array.from()
+        return Array.from(new Set(candidates));
     }
 
     /**
@@ -161,7 +162,7 @@ export class VisionService {
 
             // Extract text blocks
             const fullText = result.responses[0]?.fullTextAnnotation?.text || '';
-            const lines = fullText.split('\n').map(line => line.trim());
+            const lines = fullText.split('\n').map((line: string) => line.trim());
 
             // Analyze name candidates
             const nameCandidates = this.analyzeNameCandidates(lines);

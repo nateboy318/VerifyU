@@ -8,6 +8,7 @@ export interface Student {
 }
 
 export interface Event {
+  attendees: any;
   id: string;
   name: string;
   location?: string;

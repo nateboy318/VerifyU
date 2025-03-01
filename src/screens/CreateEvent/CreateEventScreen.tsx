@@ -217,6 +217,7 @@ export const CreateEventScreen = () => {
         date: eventDateTime.toISOString(),
         description: eventDescription.trim() || undefined,
         emoji: selectedEmoji,
+        attendees: [],
       });
       
       Alert.alert(
@@ -425,7 +426,7 @@ export const CreateEventScreen = () => {
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Description</Text>
                 <View style={styles.inputWrapper}>
-                  <Ionicons name="information-circle-outline" size={20} color={COLORS.primary} style={styles.inputIcon} />
+                  
                   <TextInput
                     style={[styles.input, styles.textArea]}
                     placeholder="Enter event description (optional)"
@@ -671,7 +672,7 @@ const styles = StyleSheet.create({
   },
   header: {
     color: COLORS.black,
-    backgroundColor: COLORS.primary,
+
     paddingVertical: 16,
   },
   headerContent: {
@@ -683,13 +684,15 @@ const styles = StyleSheet.create({
   backButton: {
     width: 40,
     height: 40,
+    backgroundColor: COLORS.black,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: COLORS.white,
+    color: COLORS.black,
   },
   formContainer: {
     flex: 1,
@@ -705,7 +708,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 20,
-    ...SHADOWS.light,
+    ...SHADOWS.medium,
   },
   inputContainer: {
     marginBottom: 16,

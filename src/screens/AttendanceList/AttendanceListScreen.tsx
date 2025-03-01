@@ -170,16 +170,14 @@ export const AttendanceListScreen = () => {
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
         <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <TouchableOpacity 
-              style={styles.backButton}
-              onPress={() => navigation.goBack()}
-            >
-              <Ionicons name="arrow-back" size={24} color={COLORS.white} />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Attendance</Text>
-            <View style={{ width: 40 }} />
-          </View>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color={COLORS.white} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Attendance</Text>
+          <View style={{ width: 40 }} />
         </View>
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyTitle}>No Event Selected</Text>
@@ -200,35 +198,15 @@ export const AttendanceListScreen = () => {
       <StatusBar barStyle="light-content" />
       
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: COLORS.primary }]}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color={COLORS.white} />
-          </TouchableOpacity>
-          
-          <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle}>
-              {event.name}
-            </Text>
-            {event.location && (
-              <Text style={styles.headerSubtitle}>
-                {event.location}
-              </Text>
-            )}
-          </View>
-          
-          {students.length > 0 && (
-            <TouchableOpacity 
-              style={styles.exportButton}
-              onPress={handleExportCSV}
-            >
-              <Ionicons name="share-outline" size={24} color={COLORS.white} />
-            </TouchableOpacity>
-          )}
-        </View>
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={24} color={COLORS.white} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Attendance</Text>
+        <View style={{ width: 40 }} />
       </View>
       
       {/* Search and Stats */}
@@ -392,39 +370,25 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 20 : StatusBar.currentHeight ? StatusBar.currentHeight + 10 : 10,
-    paddingBottom: 15,
-  },
-  headerContent: {
+    backgroundColor: COLORS.white,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: SIZES.padding,
-  },
-  headerTitleContainer: {
-    flex: 1,
-    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    
   },
   headerTitle: {
     fontSize: SIZES.h2,
     fontWeight: 'bold',
-    color: COLORS.white,
+    color: COLORS.black,
     textAlign: 'center',
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: COLORS.white,
-    opacity: 0.8,
   },
   backButton: {
     width: 40,
     height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  exportButton: {
-    width: 40,
-    height: 40,
+    backgroundColor: COLORS.black,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },

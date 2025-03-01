@@ -330,12 +330,12 @@ export const IDScannerScreen = () => {
           <View style={styles.overlayRow}>
             <View style={styles.overlaySection} />
             <View style={styles.cardGuide}>
-              <Text style={styles.guideText}>Align ID card here</Text>
-              <View style={[styles.cardCorner, { top: 5, left: 5 }]} />
-              <View style={[styles.cardCorner, { top: 5, right: 5 }]} />
-              <View style={[styles.cardCorner, { bottom: 5, left: 5 }]} />
-              <View style={[styles.cardCorner, { bottom: 5, right: 5 }]} />
+              <View style={[styles.cardCorner1, { top: 0, left: 0 }]} />
+              <View style={[styles.cardCorner2, { top: 0, right: 0 }]} />
+              <View style={[styles.cardCorner3, { bottom: 0, left: 0 }]} />
+              <View style={[styles.cardCorner4, { bottom: 0, right: 0 }]} />
             </View>
+            <Text style={styles.alignText}>Align with ID</Text>
             <View style={styles.overlaySection} />
           </View>
         </View>
@@ -410,6 +410,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 20,
     backgroundColor: 'rgba(0,0,0,0.3)',
+    marginLeft: 10,
   },
   headerTitle: {
     flex: 1,
@@ -472,21 +473,45 @@ const styles = StyleSheet.create({
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
     marginTop: SCREEN_HEIGHT * 0.4,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.7)',
-    borderRadius: 12,
-    backgroundColor: 'transparent',
+    position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
   },
-  cardCorner: {
+  cardCorner1: {
     position: 'absolute',
-    width: 20,
-    height: 20,
-    borderColor: COLORS.primary,
-    borderWidth: 2,
-    borderRadius: 5,
+    width: 60,
+    height: 40,
+    borderColor: '#fff',
+    borderLeftWidth: 2,
+    borderTopWidth: 2,
+    borderTopLeftRadius: 5,
+  },
+  cardCorner2: {
+    position: 'absolute',
+    width: 60,
+    height: 40,
+    borderColor: '#fff',
+    borderRightWidth: 2,
+    borderTopWidth: 2,
+    borderTopRightRadius: 5,
+  },
+  cardCorner3: {
+    position: 'absolute',
+    width: 60,
+    height: 40,
+    borderColor: '#fff',
+    borderLeftWidth: 2,
+    borderBottomWidth: 2,
+    borderBottomLeftRadius: 5,
+  },
+  cardCorner4: {
+    position: 'absolute',
+    width: 60,
+    height: 40,
+    borderColor: '#fff',
+    borderRightWidth: 2,
+    borderBottomWidth: 2,
+    borderBottomRightRadius: 5,
   },
   guideText: {
     color: COLORS.white,
@@ -583,5 +608,19 @@ const styles = StyleSheet.create({
   torchButtonText: {
     color: 'white',
     fontSize: 16,
+  },
+  alignText: {
+    position: 'absolute',
+    top: '55%',
+    left: '33%',
+    color: COLORS.white,
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    overflow: 'hidden',
   },
 });

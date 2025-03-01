@@ -343,15 +343,22 @@ export const HomeScreen = () => {
                     <View>
                       <Text style={styles.nextEventTitle}>{nextEvent.name}</Text>
                       <Text style={styles.nextEventDescription}>{nextEvent.location}</Text>
-                      </View>
+                    </View>
                   </View>
-                  <TouchableOpacity 
-                    style={styles.nextEventButton}
-                    onPress={() => isNavigationReady && navigation.navigate('AttendanceList', { eventId: nextEvent.id })}
-                  >
-                    <Text style={styles.nextEventButtonText}>View Attendance</Text>
-                    <Ionicons name="arrow-forward" size={16} color={COLORS.white} />
-                  </TouchableOpacity>
+                  <View style={styles.nextEventButtons}>
+                    <TouchableOpacity 
+                      style={styles.nextEventButton}
+                      onPress={() => isNavigationReady && navigation.navigate('AttendanceList', { eventId: nextEvent.id })}
+                    >
+                      <Text style={styles.nextEventButtonText}>View Attendance</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.nextEventButton}
+                      onPress={handleScanPress}
+                    >
+                      <Text style={styles.nextEventButtonText}>Scan IDs</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               ) : (
                 <View style={styles.emptyNextEventContainer}>
@@ -401,7 +408,7 @@ export const HomeScreen = () => {
                   icon="list-outline"
                   color={COLORS.primary}
                   onPress={() => {
-                    importNoGoList();
+                    isNavigationReady && navigation.navigate('NoGoList')
                   }}
                 />
               </View>
@@ -736,15 +743,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
+    marginBottom: 20,
   },
   nextEventBadgeText: {
     color: COLORS.white,
     fontSize: 10,
     fontWeight: 'bold',
+    
   },
   nextEventDate: {
     fontSize: 14,
     color: COLORS.textLight,
+    marginBottom: 20,
   },
   nextEventTitle: {
     fontSize: 20,
@@ -753,19 +763,15 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   nextEventButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.secondary,
     paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
+    paddingHorizontal: 15,
+    borderRadius: 5,
+    marginHorizontal: 5,
   },
   nextEventButtonText: {
     color: COLORS.white,
-    fontWeight: '600',
-    marginRight: 8,
+    fontWeight: 'bold',
   },
   nextEventDescription: {
     fontSize: 16,
@@ -841,5 +847,10 @@ const styles = StyleSheet.create({
   },
   eventEmoji: {
     fontSize: 24,
+  },
+  nextEventButtons: {
+    flexDirection: 'row',
+    gap: 5,
+    marginTop: 10,
   },
 }); 

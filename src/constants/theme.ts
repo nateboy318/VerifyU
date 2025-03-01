@@ -1,9 +1,9 @@
 export const COLORS = {
-  primary: '#000000', // Nice blue color
+  primary: '#000', // Nice blue color
   primaryDark: '#171717', // Darker blue
   primaryLight: '#5DADE2', // Lighter blue
 
-  secondary: '#000000', // Dark gray / near black
+  secondary: '#000', // Dark gray / near black
   secondaryDark: '#1C1C1C', // Darker gray
   secondaryLight: '#555555', // Lighter gray
 

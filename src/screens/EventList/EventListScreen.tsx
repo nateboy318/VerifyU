@@ -128,17 +128,11 @@ export const EventListScreen = ({ route }: any) => {
             style={[styles.actionButton, styles.viewButton]} 
             onPress={() => handleViewDetails(item.id)}
           >
-            <Ionicons name="eye-outline" size={20} color={COLORS.primary} />
-            <Text style={[styles.actionButtonText, styles.viewButtonText]}>View</Text>
+            <Ionicons name="accessibility" size={20} color={COLORS.primary} />
+            <Text style={[styles.actionButtonText, styles.viewButtonText]}>Attendance</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.editButton]} 
-            onPress={() => handleEditEvent(item.id)}
-          >
-            <Ionicons name="create-outline" size={20} color={COLORS.secondary} />
-            <Text style={[styles.actionButtonText, styles.editButtonText]}>Edit</Text>
-          </TouchableOpacity>
+
 
           <TouchableOpacity 
             style={[styles.actionButton, styles.scanButton]} 
@@ -176,16 +170,16 @@ export const EventListScreen = ({ route }: any) => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
+          <Ionicons name="arrow-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
           {filterType === 'past' ? 'Past Events' : 'All Events'}
         </Text>
         <TouchableOpacity 
-          style={styles.addButton}
+          style={styles.backButton}
           onPress={() => navigation.navigate('CreateEvent')}
         >
-          <Ionicons name="add-circle" size={28} color={COLORS.primary} />
+          <Ionicons name="add-circle" size={24} color={COLORS.white} />
         </TouchableOpacity>
       </View>
       
@@ -233,15 +227,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
-    ...SHADOWS.light,
+
+
+
   },
   backButton: {
     width: 44,
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: COLORS.black,
     borderRadius: 22,
   },
   headerTitle: {
