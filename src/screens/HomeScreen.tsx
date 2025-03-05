@@ -20,7 +20,7 @@ import { useEvents } from '../context/EventContext';
 import { getEventEmoji } from '../utils/emojiUtils';
 import { useNoGoList } from '../context/NoGoListContext';
 import { db, auth, getCurrentUser } from '../services/firebase';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { Organization, Event } from '../types/organization';
 import { useAuth } from '../context/AuthContext';
 
@@ -116,8 +116,12 @@ const EventCard = ({ title, time, icon, color, onPress, event, isLocal }: EventC
       <View style={styles.eventDetails}>
         <View style={styles.eventTitleContainer}>
           <Text style={styles.eventTitle}>{title}</Text>
-          <View style={[styles.eventTypeBadge, { backgroundColor: isLocal ? COLORS.tertiary : COLORS.primary }]}>
-            <Text style={styles.eventTypeText}>{isLocal ? 'Local' : 'Organization'}</Text>
+          <View style={[styles.eventTypeBadge, { backgroundColor: COLORS.text }]}>
+            <Text style={styles.eventTypeText}>
+              {isLocal ? 'Personal' : event.organizationName && event.organizationName.length > 15 
+                ? `${event.organizationName.substring(0, 12)}...` 
+                : event.organizationName || 'Organization'}
+            </Text>
           </View>
         </View>
         <Text style={styles.eventTime}>{time}</Text>
@@ -137,8 +141,12 @@ const HorizontalEventCard = ({ title, time, icon, color, onPress, event, isLocal
         <Text style={styles.horizontalEventIconEmoji}>{eventEmoji}</Text>
       </View>
       <Text style={styles.horizontalEventTitle} numberOfLines={1}>{title}</Text>
-      <View style={[styles.horizontalEventTypeBadge, { backgroundColor: isLocal ? COLORS.tertiary : COLORS.primary }]}>
-        <Text style={styles.horizontalEventTypeText}>{isLocal ? 'Local' : 'Organization'}</Text>
+      <View style={[styles.horizontalEventTypeBadge, { backgroundColor: COLORS.text }]}>
+        <Text style={styles.horizontalEventTypeText}>
+          {isLocal ? 'Personal' : event.organizationName && event.organizationName.length > 15 
+            ? `${event.organizationName.substring(0, 12)}...` 
+            : event.organizationName || 'Organization'}
+        </Text>
       </View>
       <Text style={styles.horizontalEventTime} numberOfLines={1}>{time}</Text>
     </TouchableOpacity>
@@ -167,6 +175,7 @@ export const HomeScreen = () => {
   
   const [isNavigationReady, setIsNavigationReady] = useState(false);
   const [organizationCount, setOrganizationCount] = useState(0);
+  const [organizationNames, setOrganizationNames] = useState<{[key: string]: string}>({});
   
   // Get current date for greeting
   const currentHour = new Date().getHours();
@@ -264,6 +273,39 @@ export const HomeScreen = () => {
 
   const { importNoGoList } = useNoGoList();
 
+  // Fetch organization names for all events with organizationId
+  useEffect(() => {
+    if (!events.length) return;
+    
+    const orgIds = events
+      .filter(event => event.organizationId)
+      .map(event => event.organizationId);
+    
+    // Remove duplicates
+    const uniqueOrgIds = [...new Set(orgIds)];
+    
+    const fetchOrgNames = async () => {
+      const names: {[key: string]: string} = {};
+      
+      for (const orgId of uniqueOrgIds) {
+        if (orgId) {
+          try {
+            const orgDoc = await getDoc(doc(db, 'organizations', orgId));
+            if (orgDoc.exists()) {
+              names[orgId] = orgDoc.data().name || 'Unknown Organization';
+            }
+          } catch (error) {
+            console.error('Error fetching organization:', error);
+          }
+        }
+      }
+      
+      setOrganizationNames(names);
+    };
+    
+    fetchOrgNames();
+  }, [events]);
+
   if (loading) {
     return (
       <View style={[styles.container]}>
@@ -312,6 +354,25 @@ export const HomeScreen = () => {
   // Separate events into local and organization events
   const localEvents = events.filter(event => !event.organizationId);
   const organizationEvents = events.filter(event => event.organizationId);
+
+  // Update the EventCard component to use the organization names
+  const renderEventCard = (event: any, isLocal: boolean) => {
+    // Get organization name if it exists
+    const orgName = event.organizationId ? organizationNames[event.organizationId] : null;
+    
+    return (
+      <EventCard 
+        key={event.id}
+        title={event.name}
+        time={formatDate(event.startDate)}
+        icon="calendar-outline"
+        color={COLORS.tertiary}
+        onPress={() => isNavigationReady && navigation.navigate('AttendanceList', { eventId: event.id })}
+        event={{...event, organizationName: orgName}}
+        isLocal={isLocal}
+      />
+    );
+  };
 
   return (
     <>
@@ -446,22 +507,11 @@ export const HomeScreen = () => {
                   {/* Local Events */}
                   {localEvents.length > 0 && (
                     <View style={styles.eventCategoryContainer}>
-                      <Text style={styles.eventCategoryTitle}>Local Events</Text>
+                      <Text style={styles.eventCategoryTitle}>Personal Events</Text>
                       {localEvents
                         .filter(event => new Date(event.startDate) >= now)
                         .slice(0, 2)
-                        .map((event) => (
-                          <EventCard 
-                            key={event.id}
-                            title={event.name}
-                            time={formatDate(event.startDate)}
-                            icon="calendar-outline"
-                            color={COLORS.tertiary}
-                            onPress={() => isNavigationReady && navigation.navigate('AttendanceList', { eventId: event.id })}
-                            event={event}
-                            isLocal={true}
-                          />
-                        ))}
+                        .map((event) => renderEventCard(event, true))}
                     </View>
                   )}
 
@@ -472,18 +522,7 @@ export const HomeScreen = () => {
                       {organizationEvents
                         .filter(event => new Date(event.startDate) >= now)
                         .slice(0, 2)
-                        .map((event) => (
-                          <EventCard 
-                            key={event.id}
-                            title={event.name}
-                            time={formatDate(event.startDate)}
-                            icon="calendar-outline"
-                            color={COLORS.primary}
-                            onPress={() => isNavigationReady && navigation.navigate('AttendanceList', { eventId: event.id })}
-                            event={event}
-                            isLocal={false}
-                          />
-                        ))}
+                        .map((event) => renderEventCard(event, false))}
                     </View>
                   )}
                 </>
@@ -509,18 +548,22 @@ export const HomeScreen = () => {
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.horizontalScrollContainer}
                 >
-                  {pastEvents.slice(0, 5).map((event) => (
-                    <HorizontalEventCard 
-                      key={event.id}
-                      title={event.name}
-                      time={formatDate(event.startDate)}
-                      icon="time-outline"
-                      color={!event.organizationId ? COLORS.tertiary : COLORS.primary}
-                      onPress={() => isNavigationReady && navigation.navigate('AttendanceList', { eventId: event.id })}
-                      event={event}
-                      isLocal={!event.organizationId}
-                    />
-                  ))}
+                  {pastEvents.slice(0, 5).map((event) => {
+                    const orgName = event.organizationId ? organizationNames[event.organizationId] : null;
+                    
+                    return (
+                      <HorizontalEventCard 
+                        key={event.id}
+                        title={event.name}
+                        time={formatDate(event.startDate)}
+                        icon="time-outline"
+                        color={!event.organizationId ? COLORS.tertiary : COLORS.tertiary}
+                        onPress={() => isNavigationReady && navigation.navigate('AttendanceList', { eventId: event.id })}
+                        event={{...event, organizationName: orgName}}
+                        isLocal={!event.organizationId}
+                      />
+                    );
+                  })}
                 </ScrollView>
               ) : (
                 <View style={styles.emptyPastEventsContainer}>
@@ -673,7 +716,7 @@ const styles = StyleSheet.create({
   eventTime: {
     fontSize: 14,
     color: COLORS.textLight,
-    marginTop: 2,
+    marginTop: 8,
   },
   emptyEventsContainer: {
     padding: 24,
@@ -842,8 +885,9 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
   },
   horizontalScrollContainer: {
-    paddingVertical: 4,
+    paddingVertical: 12,
     paddingRight: 16,
+    paddingLeft: 16,
   },
   horizontalEventCard: {
     backgroundColor: COLORS.white,
@@ -942,10 +986,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    marginBottom: 4,
   },
   eventTypeBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 4,
     borderRadius: 12,
   },
   eventTypeText: {
@@ -955,7 +1000,7 @@ const styles = StyleSheet.create({
   },
   horizontalEventTypeBadge: {
     paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingVertical: 4,
     borderRadius: 10,
     alignSelf: 'flex-start',
     marginBottom: 4,

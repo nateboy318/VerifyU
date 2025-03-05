@@ -16,6 +16,7 @@ export const COLORS = {
   success: '#28A745', // Green for success messages
   danger: '#DC3545',  // Red for error messages
   warning: '#FFC107', // Yellow for warnings
+  localbadge: '#2d6fe0',
 
   text: '#222831',
   textLight: '#757575',
