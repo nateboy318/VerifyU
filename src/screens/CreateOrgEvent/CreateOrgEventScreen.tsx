@@ -14,12 +14,17 @@ import {
   Modal,
   FlatList
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS, SIZES, SHADOWS } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { suggestEmojis, popularEmojis } from '../../utils/emojiUtils';
-import { Organization } from '../../types/organization';
 import { getCurrentUser, createEvent } from '../../services/firebase';
+import { Organization, Event } from '../../types/organization';
+import { RootStackParamList } from '../../types/navigation';
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'CreateEvent'>;
+type CreateEventScreenRouteProp = RouteProp<RootStackParamList, 'CreateEvent'>;
 
 // Helper functions for date formatting
 const formatDate = (date: Date): string => {
@@ -34,8 +39,9 @@ const formatDate = (date: Date): string => {
 const formatTime = (date: Date): string => {
   if (!date) return '';
   return date.toLocaleTimeString('en-US', {
-    hour: '2-digit',
+    hour: 'numeric',
     minute: '2-digit',
+    hour12: true,
   });
 };
 
@@ -76,18 +82,25 @@ const emojiCategories = [
 ];
 
 // Add more frequently used emojis
-const frequentEmojis = ["📅", "🎉", "👥", "��", "🛠️", "🎵", "🏆", "🎮", "🍽️", "💼", "🎓", "🎬", "🎭", "✈️", "🏖️", "📚", "🧘", "💪", "🩺", "🏥"];
+const frequentEmojis = ["📅", "🎉", "👥", "🛠️", "🎵", "🏆", "🎮", "🍽️", "💼", "🎓", "🎬", "🎭", "✈️", "🏖️", "📚", "🧘", "💪", "🩺", "🏥"];
 
 export const CreateEventScreen = () => {
-  const navigation = useNavigation() as any;
-  const route = useRoute();
-  const { organization } = route.params as { organization: Organization };
+  const navigation = useNavigation<NavigationProp>();
+  const route = useRoute<CreateEventScreenRouteProp>();
+  
+  if (!route.params?.organization) {
+    Alert.alert('Error', 'No organization selected', [
+      { text: 'OK', onPress: () => navigation.goBack() }
+    ]);
+    return null;
+  }
+
+  const { organization } = route.params;
   
   const [eventName, setEventName] = useState('');
   const [eventLocation, setEventLocation] = useState('');
   const [eventDescription, setEventDescription] = useState('');
   const [selectedEmoji, setSelectedEmoji] = useState('📅');
-  const [maxAttendees, setMaxAttendees] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [suggestedEmojis, setSuggestedEmojis] = useState<string[]>([]);
@@ -120,81 +133,73 @@ export const CreateEventScreen = () => {
     const days = generateCalendarDays(calendarViewDate);
     setCalendarDays(days);
   }, [calendarViewDate]);
-  
-  // Generate calendar days for the selected month
+
   const generateCalendarDays = (baseDate: Date): Date[] => {
     const year = baseDate.getFullYear();
     const month = baseDate.getMonth();
-    
-    // Get the first day of the month
     const firstDay = new Date(year, month, 1);
-    // Get the last day of the month
     const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDay = firstDay.getDay();
     
     const days: Date[] = [];
     
+    // Add days from previous month
+    for (let i = startingDay - 1; i >= 0; i--) {
+      days.push(new Date(year, month, -i));
+    }
+    
     // Add days from current month
-    for (let i = 1; i <= lastDay.getDate(); i++) {
-      const date = new Date(year, month, i);
-      days.push(date);
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(new Date(year, month, i));
+    }
+    
+    // Add days from next month to complete the grid
+    const remainingDays = 42 - days.length; // 6 rows * 7 days = 42
+    for (let i = 1; i <= remainingDays; i++) {
+      days.push(new Date(year, month + 1, i));
     }
     
     return days;
   };
-  
-  // Navigate to previous month
+
   const goToPreviousMonth = () => {
-    const newDate = new Date(calendarViewDate);
-    newDate.setMonth(newDate.getMonth() - 1);
-    setCalendarViewDate(newDate);
+    setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() - 1));
   };
-  
-  // Navigate to next month
+
   const goToNextMonth = () => {
-    const newDate = new Date(calendarViewDate);
-    newDate.setMonth(newDate.getMonth() + 1);
-    setCalendarViewDate(newDate);
+    setCalendarViewDate(new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 1));
   };
-  
-  // Go to current month
+
   const goToCurrentMonth = () => {
-    const today = new Date();
-    setCalendarViewDate(today);
+    setCalendarViewDate(new Date());
   };
-  
-  // Handle time adjustment
+
   const handleHourChange = (increment: number): void => {
     let newHour = timeHour + increment;
     if (newHour > 12) newHour = 1;
     if (newHour < 1) newHour = 12;
     setTimeHour(newHour);
   };
-  
+
   const handleMinuteChange = (increment: number): void => {
     let newMinute = timeMinute + increment;
     if (newMinute >= 60) newMinute = 0;
     if (newMinute < 0) newMinute = 55;
     setTimeMinute(newMinute);
   };
-  
+
   const toggleAmPm = (): void => {
     setTimeAmPm(timeAmPm === 'AM' ? 'PM' : 'AM');
   };
-  
-  // Apply the selected time to the date
+
   const applyTimeToDate = (): Date => {
-    const newDate = new Date(selectedDate);
+    const date = new Date(selectedDate);
     let hours = timeHour;
-    
-    // Convert to 24-hour format
-    if (timeAmPm === 'PM' && hours < 12) {
-      hours += 12;
-    } else if (timeAmPm === 'AM' && hours === 12) {
-      hours = 0;
-    }
-    
-    newDate.setHours(hours, timeMinute, 0);
-    return newDate;
+    if (timeAmPm === 'PM' && hours !== 12) hours += 12;
+    if (timeAmPm === 'AM' && hours === 12) hours = 0;
+    date.setHours(hours, timeMinute, 0, 0);
+    return date;
   };
 
   const validateForm = (): boolean => {
@@ -207,10 +212,9 @@ export const CreateEventScreen = () => {
 
   const handleCreateEvent = async (): Promise<void> => {
     if (!validateForm()) return;
-    
-    setIsSubmitting(true);
-    
+
     try {
+      setIsSubmitting(true);
       const currentUser = getCurrentUser();
       if (!currentUser) {
         Alert.alert('Error', 'You must be logged in to create an event');
@@ -228,20 +232,14 @@ export const CreateEventScreen = () => {
         isActive: true
       };
 
-      const createdEvent = await createEvent(newEventData, currentUser.uid, organization.id);
+      await createEvent(newEventData, currentUser.uid, organization.id);
       
       Alert.alert(
         'Success',
-        `Event "${createdEvent.name}" created successfully!`,
+        `Event "${newEventData.name}" created successfully!`,
         [
           { 
-            text: 'Start Scanning', 
-            onPress: () => {
-              navigation.replace('IDScanner', { eventId: createdEvent.id });
-            }
-          },
-          { 
-            text: 'Return to Organization', 
+            text: 'Return to Home', 
             onPress: () => {
               navigation.goBack();
             }
@@ -328,24 +326,19 @@ export const CreateEventScreen = () => {
       
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="arrow-back" size={24} color={COLORS.white} />
-          </TouchableOpacity>
-          
-          <Text style={styles.headerTitle}>Create New Event</Text>
-          
-          <View style={{ width: 40 }} />
-        </View>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={24} color={COLORS.white} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Create Organization Event</Text>
+        <View style={{ width: 40 }} />
       </View>
-      
+
       <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.formContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoidingView}
       >
         <ScrollView 
           showsVerticalScrollIndicator={false}
@@ -398,7 +391,7 @@ export const CreateEventScreen = () => {
                   <Ionicons name="location-outline" size={20} color={COLORS.primary} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="Enter location (optional)"
+                    placeholder="Enter event location (optional)"
                     value={eventLocation}
                     onChangeText={setEventLocation}
                     returnKeyType="next"
@@ -407,30 +400,31 @@ export const CreateEventScreen = () => {
                 </View>
               </View>
             </View>
-            
-            {/* Date Selection */}
+
+            {/* Date & Time Field */}
             <View style={styles.formSection}>
               <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Date & Time</Text>
+                <Text style={styles.inputLabel}>Date & Time <Text style={styles.requiredStar}>*</Text></Text>
                 <TouchableOpacity 
-                  style={styles.datePickerButton}
+                  style={styles.dateTimeButton}
                   onPress={() => setShowDatePicker(true)}
                 >
-                  <Ionicons name="calendar" size={20} color={COLORS.primary} />
-                  <Text style={styles.datePickerText}>
-                    {formatDate(selectedDate)} at {formatTime(applyTimeToDate())}
-                  </Text>
-                  <Ionicons name="chevron-down" size={16} color={COLORS.textLight} />
+                  <View style={styles.dateTimeButtonContent}>
+                    <Ionicons name="calendar-outline" size={20} color={COLORS.primary} />
+                    <Text style={styles.dateTimeButtonText}>
+                      {formatDate(selectedDate)} at {formatTime(applyTimeToDate())}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={COLORS.textLight} />
                 </TouchableOpacity>
               </View>
             </View>
-            
+
             {/* Description Field */}
             <View style={styles.formSection}>
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Description</Text>
                 <View style={styles.inputWrapper}>
-                  
                   <TextInput
                     style={[styles.input, styles.textArea]}
                     placeholder="Enter event description (optional)"
@@ -647,8 +641,6 @@ export const CreateEventScreen = () => {
               </TouchableOpacity>
             </View>
             
-            {/* Emoji search bar could be added here */}
-            
             {/* Emoji category tabs */}
             {renderEmojiCategoryTabs()}
             
@@ -672,18 +664,21 @@ export const CreateEventScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-
+    backgroundColor: COLORS.background,
   },
   header: {
-    color: COLORS.black,
-
-    paddingVertical: 16,
-  },
-  headerContent: {
+    backgroundColor: COLORS.white,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+  },
+  headerTitle: {
+    fontSize: SIZES.h2,
+    fontWeight: 'bold',
+    color: COLORS.black,
+    textAlign: 'center',
   },
   backButton: {
     width: 40,
@@ -693,33 +688,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.black,
-  },
-  formContainer: {
+  keyboardAvoidingView: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 40,
+    flexGrow: 1,
   },
   formWrapper: {
-    padding: 16,
+    padding: SIZES.padding,
   },
   formSection: {
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 16,
     marginBottom: 20,
-    ...SHADOWS.medium,
   },
   inputContainer: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   inputLabel: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: '600',
     color: COLORS.text,
     marginBottom: 8,
   },
@@ -729,13 +715,13 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.grayLight,
-    borderRadius: 8,
     backgroundColor: COLORS.white,
+    borderRadius: SIZES.radius,
+    paddingHorizontal: 12,
+    ...SHADOWS.light,
   },
   inputIcon: {
-    paddingHorizontal: 12,
+    marginRight: 8,
   },
   input: {
     flex: 1,
@@ -744,37 +730,33 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   textArea: {
-    minHeight: 100,
+    height: 100,
     textAlignVertical: 'top',
-    paddingTop: 12,
   },
-  helperText: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    marginTop: 4,
-    marginLeft: 4,
-  },
-  datePickerButton: {
+  dateTimeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderWidth: 1,
-    borderColor: COLORS.grayLight,
-    borderRadius: 8,
+    justifyContent: 'space-between',
     backgroundColor: COLORS.white,
+    borderRadius: SIZES.radius,
+    padding: 12,
+    ...SHADOWS.light,
   },
-  datePickerText: {
-    flex: 1,
+  dateTimeButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dateTimeButtonText: {
     fontSize: 16,
     color: COLORS.text,
     marginLeft: 8,
   },
   summaryCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 16,
+    borderRadius: SIZES.radius,
     padding: 16,
-    marginBottom: 24,
-    ...SHADOWS.light,
+    marginTop: 20,
+    ...SHADOWS.medium,
   },
   summaryHeader: {
     flexDirection: 'row',
@@ -807,6 +789,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 20,
     ...SHADOWS.medium,
   },
   disabledButton: {

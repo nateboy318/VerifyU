@@ -11,3 +11,6 @@ export type RootStackParamList = {
   IDScannerFallback: undefined;
   AttendanceList: undefined;
 };
+
+// Re-export the Event interface from organization.ts
+export type { Event } from './organization';

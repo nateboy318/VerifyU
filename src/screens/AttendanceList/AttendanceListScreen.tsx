@@ -19,13 +19,11 @@ import {
   RefreshControl
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { Student } from '../../types';
-import { useEvents } from '../../context/EventContext';
+import { Attendance, Organization } from '../../types/organization';
 import { COLORS, SIZES, SHADOWS } from '../../constants/theme';
-import Card from '../../components/Card';
-import Button from '../../components/Button';
-import { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import { getEventDetails, getEventAttendance, markAttendance } from '../../services/firebase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Configure layout animations for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -37,25 +35,63 @@ export const AttendanceListScreen = () => {
   const route = useRoute() as any;
   const eventId = route.params?.eventId;
   
-  const { 
-    getEventById, 
-    getAttendanceForEvent, 
-    removeStudentFromEvent, 
-    clearAttendanceForEvent,
-    loading,
-    downloadCSV
-  } = useEvents();
-  
-  const event = eventId ? getEventById(eventId) : undefined;
-  const students = eventId ? getAttendanceForEvent(eventId) : [];
-  
+  const [event, setEvent] = useState<any>(null);
+  const [attendanceList, setAttendanceList] = useState<Attendance[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [organization, setOrganization] = useState<Organization | null>(null);
   
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(50)).current;
   const searchInputAnim = useRef(new Animated.Value(0)).current;
+  
+  // Load event details and attendance
+  useEffect(() => {
+    loadEventData();
+  }, [eventId]);
+
+  useEffect(() => {
+    if (route.params?.organization) {
+      setOrganization(route.params.organization);
+    } else {
+      Alert.alert('Error', 'Organization data not found', [
+        { text: 'OK', onPress: () => navigation.goBack() }
+      ]);
+    }
+  }, [route.params?.organization]);
+
+  const loadEventData = async () => {
+    if (!eventId) return;
+    
+    try {
+      setLoading(true);
+      
+      // Check if this is a local event
+      const localEvents = await AsyncStorage.getItem('localEvents');
+      if (localEvents) {
+        const events = JSON.parse(localEvents);
+        const localEvent = events.find((e: any) => e.id === eventId);
+        if (localEvent) {
+          setEvent(localEvent);
+          setAttendanceList(localEvent.attendance || []);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // If not a local event, load from Firebase
+      const { event: eventData, attendance } = await getEventDetails(eventId);
+      setEvent(eventData);
+      setAttendanceList(attendance);
+    } catch (error) {
+      console.error('Error loading event data:', error);
+      Alert.alert('Error', 'Failed to load event data');
+    } finally {
+      setLoading(false);
+    }
+  };
   
   // Run entrance animation when component mounts
   useEffect(() => {
@@ -82,87 +118,107 @@ export const AttendanceListScreen = () => {
     }).start();
   };
 
-  const formattedDate = (date: Date | null | undefined) => {
+  const formattedDate = (date: Date | number | null | undefined) => {
     if (!date) return 'N/A';
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const dateObj = new Date(date);
+    return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const formattedDateFull = (date: Date | null | undefined) => {
+  const formattedDateFull = (date: Date | number | null | undefined) => {
     if (!date) return 'N/A';
-    return date.toLocaleDateString([], { 
+    const dateObj = new Date(date);
+    return dateObj.toLocaleDateString([], { 
       year: 'numeric', 
       month: 'short', 
       day: 'numeric' 
-    }) + ' ' + date.toLocaleTimeString([], { 
+    }) + ' ' + dateObj.toLocaleTimeString([], { 
       hour: '2-digit', 
       minute: '2-digit' 
     });
   };
 
-  const handleRemoveStudent = (studentId: string, name: string) => {
-    if (!eventId) return;
-    
-    Alert.alert(
-      'Remove Student',
-      `Are you sure you want to remove ${name} from the attendance list?`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-            await removeStudentFromEvent(eventId, studentId);
-          },
-        },
-      ]
-    );
-  };
-  
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setRefreshing(true);
-    // In a real app with server data, you would refetch here
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
+    await loadEventData();
+    setRefreshing(false);
   };
 
-  const handleClearList = () => {
-    if (!eventId) return;
-    
-    Alert.alert(
-      'Clear Attendance List',
-      'Are you sure you want to clear the entire attendance list? This action cannot be undone.',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: async () => {
-            await clearAttendanceForEvent(eventId);
-          },
-        },
-      ]
-    );
-  };
-
-  const handleExportCSV = () => {
-    downloadCSV(eventId);
-  };
-
-  const filteredStudents = students.filter((student: { name: string; id: string; }) => {
+  const filteredAttendance = attendanceList.filter((record) => {
     const searchLower = searchText.toLowerCase();
     return (
-      student.name.toLowerCase().includes(searchLower) ||
-      student.id.toLowerCase().includes(searchLower)
+      record.userId.toLowerCase().includes(searchLower)
     );
   });
+
+  const saveLocalEvent = async (eventData: any) => {
+    const newEvent = {
+      id: Date.now().toString(),
+      ...eventData,
+      isLocal: true,
+      createdAt: Date.now(),
+      attendanceCount: 0
+    };
+    const existingEvents = await AsyncStorage.getItem('localEvents');
+    const events = existingEvents ? JSON.parse(existingEvents) : [];
+    events.push(newEvent);
+    await AsyncStorage.setItem('localEvents', JSON.stringify(events));
+  };
+
+  const handleLocalAttendance = async (
+    eventId: string,
+    userId: string,
+    checkedInBy: string,
+    status: 'present' | 'absent' | 'late',
+    notes?: string,
+    imagePath?: string
+  ) => {
+    try {
+      if (event.isLocal) {
+        // Handle local event attendance
+        const localEvents = await AsyncStorage.getItem('localEvents');
+        if (localEvents) {
+          const events = JSON.parse(localEvents);
+          const eventIndex = events.findIndex((e: any) => e.id === eventId);
+          
+          if (eventIndex !== -1) {
+            const attendance = {
+              id: Date.now().toString(),
+              eventId,
+              userId,
+              timestamp: Date.now(),
+              status,
+              notes,
+              checkedInBy,
+              imagePath
+            };
+
+            // Initialize attendance array if it doesn't exist
+            if (!events[eventIndex].attendance) {
+              events[eventIndex].attendance = [];
+            }
+
+            // Add new attendance record
+            events[eventIndex].attendance.push(attendance);
+            events[eventIndex].attendanceCount = events[eventIndex].attendance.length;
+
+            // Save back to AsyncStorage
+            await AsyncStorage.setItem('localEvents', JSON.stringify(events));
+            
+            // Update local state
+            setAttendanceList(events[eventIndex].attendance);
+            setEvent(events[eventIndex]);
+          }
+        }
+      } else {
+        // Handle organization event attendance
+        await markAttendance(eventId, userId, checkedInBy, status, notes, imagePath);
+        await loadEventData(); // Reload attendance data
+      }
+    } catch (error) {
+      console.error('Error marking attendance:', error);
+      Alert.alert('Error', 'Failed to mark attendance');
+    }
+  };
 
   // If no event ID was provided or event doesn't exist
   if (!eventId || !event) {
@@ -248,7 +304,7 @@ export const AttendanceListScreen = () => {
           <Ionicons name="search" size={20} color={COLORS.textLight} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search by name or ID"
+            placeholder="Search by ID"
             placeholderTextColor={COLORS.textLight}
             value={searchText}
             onChangeText={setSearchText}
@@ -270,36 +326,39 @@ export const AttendanceListScreen = () => {
         <View style={styles.emptyContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.emptyText}>
-            Loading student data...
+            Loading attendance data...
           </Text>
         </View>
-      ) : students.length === 0 ? (
+      ) : attendanceList.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="people-outline" size={64} color={COLORS.primary} style={{ opacity: 0.5 }} />
-          <Text style={styles.emptyTitle}>No Students</Text>
+          <Text style={styles.emptyTitle}>No Attendance Records</Text>
           <Text style={styles.emptyText}>
-            No students have been added to this event's attendance list yet.
+            No attendance records have been added to this event yet.
           </Text>
           <TouchableOpacity 
             style={styles.button}
-            onPress={() => navigation.navigate('IDScanner', { eventId: eventId })}
+            onPress={() => navigation.navigate('IDScanner', { 
+              eventId: eventId,
+              isLocal: event.isLocal 
+            })}
           >
             <Text style={styles.buttonText}>Scan Student ID</Text>
           </TouchableOpacity>
         </View>
-      ) : filteredStudents.length === 0 ? (
+      ) : filteredAttendance.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="search-outline" size={64} color={COLORS.primary} style={{ opacity: 0.5 }} />
           <Text style={styles.emptyTitle}>No Results</Text>
           <Text style={styles.emptyText}>
-            No students match your search. Try a different name or ID.
+            No records match your search. Try a different ID.
           </Text>
-          <Button
-            title="Clear Search"
+          <TouchableOpacity
+            style={styles.button}
             onPress={() => setSearchText('')}
-            type="outline"
-            style={{ marginTop: 20 }}
-          />
+          >
+            <Text style={styles.buttonText}>Clear Search</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <Animated.View
@@ -312,7 +371,7 @@ export const AttendanceListScreen = () => {
           ]}
         >
           <FlatList
-            data={filteredStudents}
+            data={filteredAttendance}
             keyExtractor={(item) => item.id}
             refreshControl={
               <RefreshControl
@@ -321,45 +380,44 @@ export const AttendanceListScreen = () => {
                 tintColor={COLORS.primary}
               />
             }
-            renderItem={({ item }) => (
-              <View style={styles.studentCard}>
-                <View style={styles.studentInfo}>
-                  {item.imagePath ? (
-                    <View style={styles.idImageContainer}>
+            renderItem={({ item }) => {
+              console.log('Attendance item:', {
+                id: item.id,
+                imagePath: item.imagePath,
+                notes: item.notes
+              });
+              
+              return (
+                <View style={styles.studentCard}>
+                  <View style={styles.studentInfo}>
+                    {item.imagePath ? (
                       <Image 
-                        source={{ uri: item.imagePath }} 
-                        style={styles.idImage} 
-                        resizeMode="cover"
+                        source={{ uri: item.imagePath }}
+                        style={styles.idImage}
+                        resizeMode="contain"
+                        onError={(error) => console.error('Image loading error:', error.nativeEvent.error)}
+                        onLoad={() => console.log('Image loaded successfully:', item.imagePath)}
                       />
+                    ) : (
+                      <View style={styles.avatarContainer}>
+                        <Text style={styles.avatarText}>{item.userId.charAt(0).toUpperCase()}</Text>
+                      </View>
+                    )}
+                    <View style={styles.studentDetails}>
+                      <Text style={styles.studentName}>{item.notes?.split('Name: ')[1] || 'Unknown Student'}</Text>
+                      <Text style={styles.studentId}>Student ID: {item.userId}</Text>
+                      <Text style={styles.studentTime}>
+                        {formattedDateFull(item.timestamp)}
+                      </Text>
                     </View>
-                  ) : (
-                    <View style={styles.avatarContainer}>
-                      <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
-                    </View>
-                  )}
-                  <View style={styles.studentDetails}>
-                    <Text style={styles.studentName}>{item.name}</Text>
-                    <Text style={styles.studentId}>{item.id}</Text>
-                    <Text style={styles.studentTime}>
-                      {formattedDateFull(item.timestamp)}
-                    </Text>
                   </View>
-                  <TouchableOpacity 
-                    style={styles.removeButton}
-                    onPress={() => handleRemoveStudent(item.id, item.name)}
-                  >
-                    <Ionicons name="close-circle" size={24} color={COLORS.danger} />
-                  </TouchableOpacity>
                 </View>
-              </View>
-            )}
+              );
+            }}
             contentContainerStyle={styles.listContent}
           />
         </Animated.View>
       )}
-      
-      {/* Footer Action Button */}
-      
     </SafeAreaView>
   );
 };
@@ -376,7 +434,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    
   },
   headerTitle: {
     fontSize: SIZES.h2,
@@ -396,7 +453,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     paddingHorizontal: SIZES.padding,
     paddingVertical: 15,
-
   },
   searchInputContainer: {
     flexDirection: 'row',
@@ -418,70 +474,59 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 12,
-    paddingBottom: 100, // Extra space at bottom for footer button
+    paddingBottom: 100,
   },
   studentCard: {
     marginVertical: 8,
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 16,
     backgroundColor: COLORS.white,
     borderRadius: SIZES.radius,
-
     ...SHADOWS.light,
   },
   studentInfo: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+  idImage: {
+    width: 120,
+    height: 75,
+    borderRadius: 8,
+    marginRight: 16,
+    backgroundColor: COLORS.background,
+  },
   avatarContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 120,
+    height: 75,
+    borderRadius: 8,
     backgroundColor: COLORS.secondary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
   },
   avatarText: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 'bold',
     color: COLORS.white,
   },
   studentDetails: {
     flex: 1,
+    justifyContent: 'center',
   },
   studentName: {
     fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.text,
-    marginBottom: 2,
+    marginBottom: 4,
   },
   studentId: {
-    fontSize: 14,
-    color: COLORS.textLight,
+    fontSize: 15,
+    color: COLORS.text,
+    marginBottom: 2,
   },
   studentTime: {
-    fontSize: 12,
+    fontSize: 14,
     color: COLORS.textLight,
-  },
-  removeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.grayLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: COLORS.white,
-    padding: SIZES.padding,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.gray,
-    ...SHADOWS.medium,
   },
   emptyContainer: {
     flex: 1,
@@ -515,24 +560,5 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  idImageContainer: {
-    borderWidth: 2,
-    borderColor: COLORS.neutral,
-    borderRadius: 10,
-    padding: 2,
-    backgroundColor: COLORS.white,
-    shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    marginRight: 16,
-  },
-  idImage: {
-    width: 100,
-    height: 63,
-    borderRadius: 8,
-    backgroundColor: COLORS.grayLight,
   },
 });

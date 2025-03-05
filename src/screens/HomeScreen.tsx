@@ -19,6 +19,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEvents } from '../context/EventContext';
 import { getEventEmoji } from '../utils/emojiUtils';
 import { useNoGoList } from '../context/NoGoListContext';
+import { db, auth, getCurrentUser } from '../services/firebase';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { Organization, Event } from '../types/organization';
+import { useAuth } from '../context/AuthContext';
 
 // Helper function to format dates to mm/dd/yy x:xxpm/am
 const formatDate = (dateString: string | undefined): string => {
@@ -65,6 +69,7 @@ interface EventCardProps {
   color: string;
   onPress: () => void;
   event: any;
+  isLocal: boolean;
 }
 
 // New interface for horizontal scrolling event cards
@@ -75,6 +80,7 @@ interface HorizontalEventCardProps {
   color: string;
   onPress: () => void;
   event: any;
+  isLocal: boolean;
 }
 
 interface SpecialistBoxProps {
@@ -99,7 +105,7 @@ const StatBox = ({ icon, title, value, color }: StatBoxProps) => (
 );
 
 // Event card component with emoji support
-const EventCard = ({ title, time, icon, color, onPress, event }: EventCardProps) => {
+const EventCard = ({ title, time, icon, color, onPress, event, isLocal }: EventCardProps) => {
   const eventEmoji = getEventEmoji(event);
   
   return (
@@ -108,7 +114,12 @@ const EventCard = ({ title, time, icon, color, onPress, event }: EventCardProps)
         <Text style={styles.eventIconEmoji}>{eventEmoji}</Text>
       </View>
       <View style={styles.eventDetails}>
-        <Text style={styles.eventTitle}>{title}</Text>
+        <View style={styles.eventTitleContainer}>
+          <Text style={styles.eventTitle}>{title}</Text>
+          <View style={[styles.eventTypeBadge, { backgroundColor: isLocal ? COLORS.tertiary : COLORS.primary }]}>
+            <Text style={styles.eventTypeText}>{isLocal ? 'Local' : 'Organization'}</Text>
+          </View>
+        </View>
         <Text style={styles.eventTime}>{time}</Text>
       </View>
       <Ionicons name="chevron-forward" size={20} color={COLORS.grayDark} />
@@ -117,7 +128,7 @@ const EventCard = ({ title, time, icon, color, onPress, event }: EventCardProps)
 };
 
 // Horizontal event card component for past events with emoji support
-const HorizontalEventCard = ({ title, time, icon, color, onPress, event }: HorizontalEventCardProps) => {
+const HorizontalEventCard = ({ title, time, icon, color, onPress, event, isLocal }: HorizontalEventCardProps) => {
   const eventEmoji = getEventEmoji(event);
   
   return (
@@ -126,6 +137,9 @@ const HorizontalEventCard = ({ title, time, icon, color, onPress, event }: Horiz
         <Text style={styles.horizontalEventIconEmoji}>{eventEmoji}</Text>
       </View>
       <Text style={styles.horizontalEventTitle} numberOfLines={1}>{title}</Text>
+      <View style={[styles.horizontalEventTypeBadge, { backgroundColor: isLocal ? COLORS.tertiary : COLORS.primary }]}>
+        <Text style={styles.horizontalEventTypeText}>{isLocal ? 'Local' : 'Organization'}</Text>
+      </View>
       <Text style={styles.horizontalEventTime} numberOfLines={1}>{time}</Text>
     </TouchableOpacity>
   );
@@ -148,16 +162,31 @@ const SpecialistBox = ({ title, count, icon, color, onPress }: SpecialistBoxProp
 
 export const HomeScreen = () => {
   const navigation = useNavigation() as any;
-  
-  // Use the events context directly
   const { events, loading, error, getAttendanceCountForToday } = useEvents();
+  const { user } = useAuth();
   
   const [isNavigationReady, setIsNavigationReady] = useState(false);
-  const [userName, setUserName] = useState('User');
+  const [organizationCount, setOrganizationCount] = useState(0);
   
   // Get current date for greeting
   const currentHour = new Date().getHours();
   const greeting = currentHour < 12 ? 'Good Morning' : currentHour < 18 ? 'Good Afternoon' : 'Good Evening';
+
+  // Get user's organizations count
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const q = query(
+      collection(db, 'organizations'),
+      where('members', 'array-contains', user.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setOrganizationCount(snapshot.docs.length);
+    });
+
+    return () => unsubscribe();
+  }, [user?.uid]);
 
   // Ensure navigation is ready before using it
   useEffect(() => {
@@ -220,7 +249,7 @@ export const HomeScreen = () => {
           { text: 'Cancel', style: 'cancel' },
           { 
             text: 'Create Event', 
-            onPress: () => navigation.navigate('CreateEvent')
+            onPress: () => navigation.navigate('CreateLocalEvent')
           }
         ]
       );
@@ -266,22 +295,23 @@ export const HomeScreen = () => {
   }
 
   // Get the most recent event
-  const latestEvent = events.length > 0 ? events[0] : null;
-
-  // Separate events into upcoming and past events
   const now = new Date();
   const upcomingEvents = events.filter(event => {
-    if (!event.date) return true; // Events without dates go to upcoming for now
-    return new Date(event.date) >= now;
-  });
+    if (!event.startDate) return false;
+    return new Date(event.startDate) >= now;
+  }).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
   
   const pastEvents = events.filter(event => {
-    if (!event.date) return false; // Events without dates don't go to past
-    return new Date(event.date) < now;
-  });
-  
+    if (!event.startDate) return false;
+    return new Date(event.startDate) < now;
+  }).sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+
   // Get the next upcoming event (or current active event)
   const nextEvent = upcomingEvents.length > 0 ? upcomingEvents[0] : null;
+
+  // Separate events into local and organization events
+  const localEvents = events.filter(event => !event.organizationId);
+  const organizationEvents = events.filter(event => event.organizationId);
 
   return (
     <>
@@ -310,33 +340,15 @@ export const HomeScreen = () => {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.contentContainer}
           >
-            {/* Stats Section */}
-            {/* <View style={styles.statsGrid}>
-              <StatBox 
-                icon="scan-outline" 
-                title="Scanned Today" 
-                value={scannedToday.toString()} 
-                color={COLORS.primary} 
-              />
-              <StatBox 
-                icon="time-outline" 
-                title="Active Events" 
-                value={events.length.toString()} 
-                color={COLORS.secondary} 
-              />
-            </View> */}
-            
             {/* Next Up Event Section */}
             <View style={styles.sectionContainer}>
-              
-              
               {nextEvent ? (
                 <View style={styles.nextEventContainer}>
                   <View style={styles.nextEventHeader}>
                     <View style={[styles.nextEventBadge, { backgroundColor: COLORS.primary }]}>
                       <Text style={styles.nextEventBadgeText}>NEXT EVENT</Text>
                     </View>
-                    <Text style={styles.nextEventDate}>{formatDate(nextEvent.date)}</Text>
+                    <Text style={styles.nextEventDate}>{formatDate(nextEvent.startDate)}</Text>
                   </View>
                   <View style={styles.nextEventInfo}>
                     <Text style={styles.nextEventEmoji}>{getEventEmoji(nextEvent)}</Text>
@@ -366,7 +378,7 @@ export const HomeScreen = () => {
                   <Text style={styles.emptyEventsText}>No upcoming events</Text>
                   <TouchableOpacity 
                     style={styles.createEventButton}
-                    onPress={() => isNavigationReady && navigation.navigate('CreateEvent')}
+                    onPress={() => isNavigationReady && navigation.navigate('CreateLocalEvent')}
                   >
                     <Text style={styles.createEventButtonText}>Create Event</Text>
                   </TouchableOpacity>
@@ -377,7 +389,6 @@ export const HomeScreen = () => {
             <View style={styles.sectionContainer}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Actions</Text>
-
               </View>
               
               <View style={styles.specialistsGrid}>
@@ -389,11 +400,18 @@ export const HomeScreen = () => {
                   onPress={handleScanPress}
                 />
                 <SpecialistBox 
+                  title="Organizations"
+                  count={organizationCount}
+                  icon="people"
+                  color={COLORS.secondary}
+                  onPress={() => navigation.navigate('Organizations')}
+                />
+                <SpecialistBox 
                   title="Create Event"
                   count={events.length}
                   icon="add-circle-outline"
                   color={COLORS.secondary}
-                  onPress={() => isNavigationReady && navigation.navigate('CreateEvent')}
+                  onPress={() => isNavigationReady && navigation.navigate('CreateLocalEvent')}
                 />
                 <SpecialistBox 
                   title="View Events"
@@ -424,17 +442,51 @@ export const HomeScreen = () => {
               </View>
               
               {upcomingEvents.length > 0 ? (
-                upcomingEvents.slice(0, 2).map((event) => (
-                  <EventCard 
-                    key={event.id}
-                    title={event.name}
-                    time={formatDate(event.date)}
-                    icon="calendar-outline"
-                    color={COLORS.tertiary}
-                    onPress={() => isNavigationReady && navigation.navigate('AttendanceList', { eventId: event.id })}
-                    event={event}
-                  />
-                ))
+                <>
+                  {/* Local Events */}
+                  {localEvents.length > 0 && (
+                    <View style={styles.eventCategoryContainer}>
+                      <Text style={styles.eventCategoryTitle}>Local Events</Text>
+                      {localEvents
+                        .filter(event => new Date(event.startDate) >= now)
+                        .slice(0, 2)
+                        .map((event) => (
+                          <EventCard 
+                            key={event.id}
+                            title={event.name}
+                            time={formatDate(event.startDate)}
+                            icon="calendar-outline"
+                            color={COLORS.tertiary}
+                            onPress={() => isNavigationReady && navigation.navigate('AttendanceList', { eventId: event.id })}
+                            event={event}
+                            isLocal={true}
+                          />
+                        ))}
+                    </View>
+                  )}
+
+                  {/* Organization Events */}
+                  {organizationEvents.length > 0 && (
+                    <View style={styles.eventCategoryContainer}>
+                      <Text style={styles.eventCategoryTitle}>Organization Events</Text>
+                      {organizationEvents
+                        .filter(event => new Date(event.startDate) >= now)
+                        .slice(0, 2)
+                        .map((event) => (
+                          <EventCard 
+                            key={event.id}
+                            title={event.name}
+                            time={formatDate(event.startDate)}
+                            icon="calendar-outline"
+                            color={COLORS.primary}
+                            onPress={() => isNavigationReady && navigation.navigate('AttendanceList', { eventId: event.id })}
+                            event={event}
+                            isLocal={false}
+                          />
+                        ))}
+                    </View>
+                  )}
+                </>
               ) : (
                 <View style={styles.emptyEventsContainer}>
                   <Text style={styles.emptyEventsText}>No events scheduled</Text>
@@ -461,11 +513,12 @@ export const HomeScreen = () => {
                     <HorizontalEventCard 
                       key={event.id}
                       title={event.name}
-                      time={formatDate(event.date)}
+                      time={formatDate(event.startDate)}
                       icon="time-outline"
-                      color={COLORS.grayDark}
+                      color={!event.organizationId ? COLORS.tertiary : COLORS.primary}
                       onPress={() => isNavigationReady && navigation.navigate('AttendanceList', { eventId: event.id })}
                       event={event}
+                      isLocal={!event.organizationId}
                     />
                   ))}
                 </ScrollView>
@@ -852,5 +905,64 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 5,
     marginTop: 10,
+  },
+  quickActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 16,
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    ...SHADOWS.medium,
+  },
+  actionButtonText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  eventCategoryContainer: {
+    marginBottom: 16,
+  },
+  eventCategoryTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textLight,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  eventTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  eventTypeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  eventTypeText: {
+    fontSize: 12,
+    color: COLORS.white,
+    fontWeight: '500',
+  },
+  horizontalEventTypeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    marginBottom: 4,
+  },
+  horizontalEventTypeText: {
+    fontSize: 10,
+    color: COLORS.white,
+    fontWeight: '500',
   },
 }); 

@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Alert, StatusBar, SafeAreaView, Image } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions, FlashMode } from 'expo-camera';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { useEvents } from '../../context/EventContext';
 import { useNoGoList } from '../../context/NoGoListContext';
 import { COLORS, SIZES, SHADOWS } from '../../constants/theme';
 import * as FileSystem from 'expo-file-system';
@@ -11,6 +10,8 @@ import { SaveFormat } from 'expo-image-manipulator';
 import { Ionicons } from '@expo/vector-icons';
 import { Student } from '../../types';
 import { VisionService } from '../../services/VisionService';
+import { markAttendance, getCurrentUser } from '../../services/firebase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Screen dimensions
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -27,13 +28,10 @@ export const IDScannerScreen = () => {
   const navigation = useNavigation() as any;
   const route = useRoute() as any;
   const eventId = route.params?.eventId;
-  const { getEventById, addStudentToEvent } = useEvents();
   const cameraRef = useRef<CameraView>(null);
   const [ocrProgress, setOcrProgress] = useState<string>('');
   const [croppedPhoto, setCroppedPhoto] = useState<string | null>(null);
   const { isOnNoGoList } = useNoGoList();
-
-  const event = eventId ? getEventById(eventId) : undefined;
 
   useEffect(() => {
     if (!permission?.granted) {
@@ -209,8 +207,9 @@ export const IDScannerScreen = () => {
       console.log('OCR Result:', JSON.stringify(result));
 
       // Extract student info from OCR
-      const { id, name, imagePath } = result;
-      console.log('Extracted:', { id, name, imagePath });
+      const { id, name } = result;
+      const finalImagePath = result.imagePath || croppedPhoto || undefined;
+      console.log('Extracted:', { id, name, imagePath: finalImagePath });
 
       if (!id || !name) {
         Alert.alert("Extraction Failed", "Could not extract all required information. Please try again.");
@@ -239,54 +238,34 @@ export const IDScannerScreen = () => {
         return;
       }
 
-      // Create student object
-      const student: Student = {
-        id,
-        name,
-        timestamp: new Date(),
-        imagePath: imagePath || croppedPhoto || undefined
-      };
-
-      // If we have an event ID, add the student to that event
-      if (eventId) {
-        await addStudentToEvent(eventId, student);
-        
-        Alert.alert(
-          'Success',
-          `Added student: ${student.name} (ID: ${student.id})`,
-          [
-            { text: 'View Attendance', onPress: () => navigation.navigate('AttendanceList', { eventId }) },
-            { text: 'Scan Another', onPress: () => {
-              // Reset all scanning related states
-              setScanning(false);
-              setOcrProgress('');
-              setCroppedPhoto(null);
-            }}
-          ]
-        );
-      } else {
-        // For backward compatibility if not using events
-        Alert.alert(
-          'Success',
-          `Added student: ${student.name} (ID: ${student.id})`,
-          [
-            { text: 'View Attendance', onPress: () => navigation.navigate('AttendanceList') },
-            { text: 'Scan Another', onPress: () => {
-              // Reset all scanning related states
-              setScanning(false);
-              setOcrProgress('');
-              setCroppedPhoto(null);
-            }}
-          ]
-        );
+      // Get current user
+      const currentUser = getCurrentUser();
+      if (!currentUser) {
+        Alert.alert('Error', 'You must be logged in to mark attendance');
+        return;
       }
-      
+
+      // If we have an event ID, mark attendance for that event
+      if (eventId) {
+        await markAttendance(
+          eventId,
+          id,
+          currentUser.uid,
+          'present',
+          `Name: ${name}`,
+          finalImagePath
+        );
+
+        // Navigate back to attendance list
+        navigation.navigate('AttendanceList', { eventId });
+      }
     } catch (error) {
       console.error('Error processing OCR result:', error);
       Alert.alert('Error', 'Failed to process the ID card. Please try again.');
     } finally {
       setScanning(false);
       setOcrProgress('');
+      setCroppedPhoto(null);
     }
   };
 

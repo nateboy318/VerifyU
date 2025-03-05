@@ -50,16 +50,43 @@ export const EventListScreen = ({ route }: any) => {
   const navigation = useNavigation() as any;
   const { events, deleteEvent, loading } = useEvents();
   
+  // Add debug logging
+  console.log('EventListScreen - All events from context:', events);
+  console.log('EventListScreen - Number of events:', events.length);
+  
   // Filter for past events if filter parameter is provided
   const filterType = route?.params?.filter;
   const now = new Date();
   
+  // Show all events by default, only filter if specifically requested
   const filteredEvents = filterType === 'past' 
     ? events.filter(event => {
-        if (!event.date) return false;
-        return new Date(event.date) < now;
-      })
-    : events;
+        if (!event.startDate) return false;
+        return new Date(event.startDate) < now;
+      }).sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
+    : filterType === 'upcoming'
+    ? events.filter(event => {
+        if (!event.startDate) return false;
+        return new Date(event.startDate) >= now;
+      }).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+    : events.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+
+  // Add debug logging for filtered events
+  console.log('EventListScreen - Filtered events:', filteredEvents);
+  console.log('EventListScreen - Number of filtered events:', filteredEvents.length);
+  console.log('EventListScreen - Filter type:', filterType);
+
+  // Log details of each event
+  filteredEvents.forEach((event, index) => {
+    console.log(`Event ${index + 1}:`, {
+      id: event.id,
+      name: event.name,
+      startDate: event.startDate,
+      organizationId: event.organizationId,
+      createdBy: event.createdBy,
+      isLocal: !event.organizationId
+    });
+  });
 
   const handleDeleteEvent = (id: string, name: string) => {
     Alert.alert(
@@ -92,7 +119,7 @@ export const EventListScreen = ({ route }: any) => {
   };
 
   const renderEventItem = ({ item }: { item: any }) => {
-    const isPast = item.date ? new Date(item.date) < now : false;
+    const isPast = item.startDate ? new Date(item.startDate) < now : false;
     const eventEmoji = getEventEmoji(item);
     
     return (
@@ -105,14 +132,14 @@ export const EventListScreen = ({ route }: any) => {
               </View>
               <Text style={styles.eventName}>{item.name}</Text>
             </View>
-            <Text style={styles.eventDate}>{formatDate(item.date)}</Text>
+            <Text style={styles.eventDate}>{formatDate(item.startDate)}</Text>
           </View>
           
           <View style={styles.eventCardStats}>
             <View style={styles.eventStat}>
               <Ionicons name="people-outline" size={16} color={COLORS.textLight} />
               <Text style={styles.eventStatText}>
-                {item.attendees?.length || 0} attendees
+                {item.attendanceCount || 0} attendees
               </Text>
             </View>
             {isPast && (
@@ -132,8 +159,6 @@ export const EventListScreen = ({ route }: any) => {
             <Text style={[styles.actionButtonText, styles.viewButtonText]}>Attendance</Text>
           </TouchableOpacity>
           
-
-
           <TouchableOpacity 
             style={[styles.actionButton, styles.scanButton]} 
             onPress={() => handleScanForEvent(item.id)}
@@ -173,7 +198,7 @@ export const EventListScreen = ({ route }: any) => {
           <Ionicons name="arrow-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {filterType === 'past' ? 'Past Events' : 'All Events'}
+          {filterType === 'past' ? 'Past Events' : filterType === 'upcoming' ? 'Upcoming Events' : 'All Events'}
         </Text>
         <TouchableOpacity 
           style={styles.backButton}
@@ -196,11 +221,13 @@ export const EventListScreen = ({ route }: any) => {
         <View style={styles.emptyContainer}>
           <Ionicons name="calendar-outline" size={80} color={COLORS.grayLight} />
           <Text style={styles.emptyTitle}>
-            {filterType === 'past' ? 'No Past Events' : 'No Events Found'}
+            {filterType === 'past' ? 'No Past Events' : filterType === 'upcoming' ? 'No Upcoming Events' : 'No Events Found'}
           </Text>
           <Text style={styles.emptyText}>
             {filterType === 'past' 
               ? 'You have no past events to display.' 
+              : filterType === 'upcoming'
+              ? 'You have no upcoming events to display.'
               : 'You haven\'t created any events yet.'}
           </Text>
           <TouchableOpacity 
@@ -227,9 +254,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: COLORS.white,
-
-
-
   },
   backButton: {
     width: 44,
@@ -266,7 +290,6 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   pastEventCard: {
-    
     opacity: 0.5,
   },
   eventCardHeader: {

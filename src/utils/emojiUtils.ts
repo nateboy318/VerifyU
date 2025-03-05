@@ -1,4 +1,4 @@
-import { Event } from '../types';
+import { Event } from '../types/organization';
 
 // Map of common event categories to emojis for suggestion
 export const categoryEmojis: Record<string, string> = {
