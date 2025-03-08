@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,14 +11,25 @@ import {
   Platform,
   SafeAreaView,
 } from 'react-native';
-import { COLORS, SIZES, SHADOWS } from '../constants/theme';
-import { signIn, signUp } from '../services/firebase';
+import { COLORS, SIZES, SHADOWS, FONTS } from '../constants/theme';
+import { signIn, signUp, signInWithApple } from '../services/firebase';
+import * as AppleAuthentication from 'expo-apple-authentication';
 
 export const AuthScreen = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
+
+  useEffect(() => {
+    const checkAppleAuthAvailable = async () => {
+      const isAvailable = await AppleAuthentication.isAvailableAsync();
+      setAppleAuthAvailable(isAvailable);
+    };
+    
+    checkAppleAuthAvailable();
+  }, []);
 
   const handleAuth = async () => {
     if (!email || !password) {
@@ -35,6 +46,19 @@ export const AuthScreen = () => {
       }
     } catch (error: any) {
       Alert.alert('Error', error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    try {
+      setIsLoading(true);
+      await signInWithApple();
+    } catch (error: any) {
+      if (error.code !== 'ERR_CANCELED') {
+        Alert.alert('Error', error.message || 'Sign in with Apple failed');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -96,6 +120,16 @@ export const AuthScreen = () => {
                 : "Don't have an account? Sign Up"}
             </Text>
           </TouchableOpacity>
+
+          {appleAuthAvailable && (
+            <AppleAuthentication.AppleAuthenticationButton
+              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+              cornerRadius={8}
+              style={styles.appleButton}
+              onPress={handleAppleSignIn}
+            />
+          )}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -118,12 +152,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 32,
-    fontWeight: 'bold',
+    fontFamily: FONTS.bold,
     color: COLORS.primary,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 18,
+    fontFamily: FONTS.regular,
     color: COLORS.textLight,
   },
   form: {
@@ -137,6 +172,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     fontSize: 16,
+    fontFamily: FONTS.regular,
     color: COLORS.text,
     ...SHADOWS.light,
   },
@@ -151,6 +187,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: COLORS.white,
     fontSize: 16,
+    fontFamily: FONTS.semiBold,
     fontWeight: '600',
   },
   switchButton: {
@@ -160,5 +197,11 @@ const styles = StyleSheet.create({
   switchButtonText: {
     color: COLORS.primary,
     fontSize: 14,
+    fontFamily: FONTS.medium,
+  },
+  appleButton: {
+    width: '100%',
+    height: 48,
+    marginTop: 16,
   },
 }); 

@@ -10,6 +10,7 @@ export interface Organization {
     name: string;
     joinCode: string;
     description?: string;
+    color?: string;
     createdAt: number;
     createdBy: string; // User ID
     members: string[]; // Array of user IDs

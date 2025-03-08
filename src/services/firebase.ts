@@ -6,6 +6,8 @@ import {
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
     signOut,
+    signInWithCredential,
+    OAuthProvider,
 } from 'firebase/auth';
 
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
@@ -32,6 +34,8 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import 'react-native-get-random-values';
 import { Organization, Event, Attendance, User, JoinCodeResponse } from '../types/organization';
+import { COLORS } from '../constants/theme';
+import * as AppleAuthentication from 'expo-apple-authentication';
 
 // Initialize Firebase - you'll need to replace these with your Firebase config
 const firebaseConfig = {
@@ -85,13 +89,20 @@ export const generateJoinCode = (): string => {
 export const createOrganization = async (
     name: string,
     description: string,
-    userId: string
+    userId: string,
+    color: string = COLORS.primary
 ): Promise<Organization> => {
     const joinCode = generateJoinCode();
+    
+    // Log the input color to verify it's coming through
+    console.log('Creating organization with color:', color);
+    
+    // Create organization object with explicit color property
     const organization: Organization = {
         id: uuidv4(),
         name,
         description,
+        color, // Ensure color is included
         joinCode,
         createdAt: Date.now(),
         createdBy: userId,
@@ -100,10 +111,19 @@ export const createOrganization = async (
         events: [],
     };
 
+    // Log the full organization object before saving
+    console.log('Organization object to save:', JSON.stringify(organization));
+
     const orgRef = doc(organizationsRef, organization.id);
     const userRef = doc(usersRef, userId);
 
-    await setDoc(orgRef, organization);
+    // Use explicit spread to ensure all fields are included
+    await setDoc(orgRef, {...organization});
+    
+    // Verify the document was written with the color field
+    const savedDoc = await getDoc(orgRef);
+    console.log('Saved organization data:', savedDoc.data());
+    
     await updateDoc(userRef, {
         organizations: arrayUnion(organization.id),
     });
@@ -481,14 +501,33 @@ export const getCurrentUser = (): FirebaseUser | null => {
 export const createUserDocument = async (user: FirebaseUser): Promise<void> => {
     if (!user.email) return;
 
-    const userDoc = {
-        id: user.uid,
-        email: user.email,
-        displayName: user.displayName || user.email.split('@')[0],
-        organizations: [],
-    };
+    try {
+        // First check if user document already exists
+        const userRef = doc(usersRef, user.uid);
+        const userSnap = await getDoc(userRef);
 
-    await setDoc(doc(usersRef, user.uid), userDoc);
+        if (userSnap.exists()) {
+            // User exists - only update fields that might have changed
+            // without touching the organizations array
+            await updateDoc(userRef, {
+                email: user.email,
+                displayName: user.displayName || user.email.split('@')[0],
+            });
+            console.log('Updated existing user document, preserving organizations');
+        } else {
+            // New user - create complete document with empty organizations
+            const userDoc = {
+                id: user.uid,
+                email: user.email,
+                displayName: user.displayName || user.email.split('@')[0],
+                organizations: [],
+            };
+            await setDoc(userRef, userDoc);
+            console.log('Created new user document with empty organizations');
+        }
+    } catch (error) {
+        console.error('Error in createUserDocument:', error);
+    }
 };
 
 // Subscribe to auth state changes
@@ -513,6 +552,49 @@ export const signIn = async (email: string, password: string): Promise<FirebaseU
 
 export const logOut = async (): Promise<void> => {
     await signOut(auth);
+};
+
+export const signInWithApple = async (): Promise<FirebaseUser> => {
+  try {
+    // First, perform Apple authentication
+    const appleCredential = await AppleAuthentication.signInAsync({
+      requestedScopes: [
+        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+        AppleAuthentication.AppleAuthenticationScope.EMAIL,
+      ],
+    });
+
+    // Create an OAuthProvider credential
+    const provider = new OAuthProvider('apple.com');
+    const authCredential = provider.credential({
+      idToken: appleCredential.identityToken || '',
+    });
+
+    // Sign in to Firebase with the Apple OAuth credential
+    const userCredential = await signInWithCredential(auth, authCredential);
+    
+    // If this is a new user, create their document
+    await createUserDocument(userCredential.user);
+    
+    // Check if we need to update the name (Apple only provides it on first sign in)
+    if (appleCredential.fullName && 
+        (appleCredential.fullName.givenName || appleCredential.fullName.familyName)) {
+      const displayName = [
+        appleCredential.fullName.givenName,
+        appleCredential.fullName.familyName
+      ].filter(Boolean).join(' ');
+      
+      if (displayName) {
+        const userRef = doc(usersRef, userCredential.user.uid);
+        await updateDoc(userRef, { displayName });
+      }
+    }
+    
+    return userCredential.user;
+  } catch (error) {
+    console.error('Error signing in with Apple:', error);
+    throw error;
+  }
 };
 
 export { auth, db };

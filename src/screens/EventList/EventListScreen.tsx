@@ -17,6 +17,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEvents } from '../../context/EventContext';
 import { getEventEmoji } from '../../utils/emojiUtils';
 import { format } from 'date-fns';
+import { doc, getDoc } from 'firebase/firestore';
+import { db, getCurrentUser } from '../../services/firebase';
+import { Organization } from '../../types/organization';
+import { Event } from '../../types/organization';
 
 // Helper function to format dates to mm/dd/yy x:xxpm/am
 const formatDate = (dateString: string | undefined): string => {
@@ -76,27 +80,71 @@ export const EventListScreen = ({ route }: any) => {
     setRefreshing(false);
   }, [refreshEvents]);
 
-  const handleDeleteEvent = (id: string, name: string) => {
-    Alert.alert(
-      'Delete Event',
-      `Are you sure you want to delete "${name}"? This action cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteEvent(id);
-              Alert.alert('Success', 'Event deleted successfully');
-            } catch (error) {
-              console.error('Error deleting event:', error);
-              Alert.alert('Error', 'Failed to delete event');
+  const handleDeleteEvent = async (id: string, name: string, event: Event) => {
+    // Get current user
+    const currentUser = getCurrentUser();
+    if (!currentUser) {
+      Alert.alert('Error', 'You must be logged in to delete events');
+      return;
+    }
+
+    try {
+      // Check if this is an organization event
+      if (event.organizationId) {
+        // Get the organization details
+        const orgDoc = await getDoc(doc(db, 'organizations', event.organizationId));
+        
+        if (!orgDoc.exists()) {
+          Alert.alert('Error', 'Organization not found');
+          return;
+        }
+        
+        const organization = orgDoc.data() as Organization;
+        
+        // Check if current user is the creator of the organization
+        if (organization.createdBy !== currentUser.uid) {
+          Alert.alert(
+            'Permission Denied', 
+            'Only the creator of an organization can delete its events'
+          );
+          return;
+        }
+      } else {
+        // For personal events, check if current user is the creator
+        if (event.createdBy !== currentUser.uid) {
+          Alert.alert(
+            'Permission Denied', 
+            'You can only delete events you created'
+          );
+          return;
+        }
+      }
+
+      // If we got here, user has permission to delete
+      Alert.alert(
+        'Delete Event',
+        `Are you sure you want to delete "${name}"? This action cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Delete', 
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await deleteEvent(id);
+                Alert.alert('Success', 'Event deleted successfully');
+              } catch (error) {
+                console.error('Error deleting event:', error);
+                Alert.alert('Error', 'Failed to delete event');
+              }
             }
           }
-        }
-      ]
-    );
+        ]
+      );
+    } catch (error) {
+      console.error('Error checking delete permissions:', error);
+      Alert.alert('Error', 'Failed to verify permissions');
+    }
   };
 
   const handleEditEvent = (eventId: string) => {
@@ -162,7 +210,7 @@ export const EventListScreen = ({ route }: any) => {
           
           <TouchableOpacity 
             style={[styles.actionButton, styles.deleteButton]} 
-            onPress={() => handleDeleteEvent(item.id, item.name)}
+            onPress={() => handleDeleteEvent(item.id, item.name, item)}
           >
             <Ionicons name="trash-outline" size={20} color={COLORS.danger || "#F44336"} />
             <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete</Text>

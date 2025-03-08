@@ -10,6 +10,7 @@ import {
   StatusBar,
   SafeAreaView,
   StyleSheet,
+  ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -35,9 +36,22 @@ export default function OrganizationScreen() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newOrgName, setNewOrgName] = useState('');
   const [newOrgDescription, setNewOrgDescription] = useState('');
+  const [selectedColor, setSelectedColor] = useState(COLORS.primary);
   
   const navigation = useNavigation<NavigationProp>();
   const { user } = useAuth();
+
+  const colorOptions = [
+    '#E23838', // Red
+    '#F78200', // Orange
+    '#FFB900', // Yellow
+    '#5EBD3E', // Green
+    '#009CDF', // Blue
+    '#973999', // Purple
+    '#ff6ec7', // Pink
+    
+    
+  ];
 
   useEffect(() => {
     if (!user?.uid) {
@@ -82,12 +96,12 @@ export default function OrganizationScreen() {
     
     try {
       const result = await joinOrganization(joinCode.toUpperCase(), user.uid);
-      if (result.success) {
+      if (result) {
         Alert.alert('Success', 'Successfully joined organization!');
         setJoinCode('');
         setShowJoinModal(false);
       } else {
-        Alert.alert('Error', result.error || 'Failed to join organization');
+        Alert.alert('Error', 'Failed to join organization');
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to join organization');
@@ -98,9 +112,10 @@ export default function OrganizationScreen() {
     if (!user?.uid) return;
     
     try {
-      await createOrganization(newOrgName, newOrgDescription, user.uid);
+      await createOrganization(newOrgName, newOrgDescription, user.uid, selectedColor);
       setNewOrgName('');
       setNewOrgDescription('');
+      setSelectedColor(COLORS.primary);
       setShowCreateModal(false);
       Alert.alert('Success', 'Organization created successfully!');
     } catch (error) {
@@ -114,7 +129,10 @@ export default function OrganizationScreen() {
       onPress={() => navigation.navigate('OrganizationDetails', { organization: item })}
     >
       <View style={styles.organizationContent}>
-        <View style={styles.organizationIcon}>
+        <View style={[
+          styles.organizationIcon, 
+          { backgroundColor: item.color || COLORS.secondary }
+        ]}>
           <Ionicons name="people" size={24} color={COLORS.white} />
         </View>
         <View style={styles.organizationInfo}>
@@ -146,13 +164,14 @@ export default function OrganizationScreen() {
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.black} />
-        </TouchableOpacity>
-          <View style={styles.headerContent}>
-            <Text style={styles.headerTitle}>Organizations</Text>
-            <Text style={styles.headerSubtitle}>Manage your organizations</Text>
-          </View>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color={COLORS.white} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Organizations</Text>
+          <View style={{ width: 40 }} />
         </View>
 
         {/* Action Buttons */}
@@ -243,6 +262,26 @@ export default function OrganizationScreen() {
                 multiline
                 placeholderTextColor={COLORS.grayDark}
               />
+              
+              <Text style={styles.colorPickerLabel}>Organization Color</Text>
+              <View style={styles.selectedColorDisplay}>
+                <View style={[styles.colorPreview, { backgroundColor: selectedColor }]} />
+                <Text style={styles.selectedColorText}>Selected Color</Text>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.colorPickerContainer}>
+                {colorOptions.map((color, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.colorOption,
+                      { backgroundColor: color },
+                      selectedColor === color && styles.selectedColorOption
+                    ]}
+                    onPress={() => setSelectedColor(color)}
+                  />
+                ))}
+              </ScrollView>
+              
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   style={styles.modalSecondaryButton}
@@ -251,7 +290,7 @@ export default function OrganizationScreen() {
                   <Text style={styles.modalSecondaryButtonText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={styles.modalPrimaryButton}
+                  style={[styles.modalPrimaryButton, { backgroundColor: selectedColor }]}
                   onPress={handleCreateOrganization}
                 >
                   <Text style={styles.modalPrimaryButtonText}>Create</Text>
@@ -275,24 +314,25 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: COLORS.white,
-    paddingHorizontal: SIZES.padding,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.grayLight,
   },
-  headerContent: {
-    flexDirection: 'column',
+  backButton: {
+    width: 40,
+    height: 40,
+    backgroundColor: COLORS.black,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.text,
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    color: COLORS.textLight,
-    marginTop: 4,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -408,9 +448,9 @@ const styles = StyleSheet.create({
   },
   modalButtons: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     gap: 12,
-    marginTop: 8,
+    marginTop: 18,
   },
   modalPrimaryButton: {
     backgroundColor: COLORS.primary,
@@ -447,5 +487,46 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.textLight,
     textAlign: 'center',
+  },
+  colorPickerLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  selectedColorDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  colorPreview: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: COLORS.grayLight,
+  },
+  selectedColorText: {
+    fontSize: 14,
+    color: COLORS.textLight,
+  },
+  colorPickerContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    maxHeight: 50,
+  },
+  colorOption: {
+    width: 30,
+    height: 30,
+    borderRadius: 18,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: COLORS.grayLight,
+  },
+  selectedColorOption: {
+    borderWidth: 3,
+    borderColor: COLORS.black,
   },
 }); 

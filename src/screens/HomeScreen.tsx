@@ -108,6 +108,11 @@ const StatBox = ({ icon, title, value, color }: StatBoxProps) => (
 // Event card component with emoji support
 const EventCard = ({ title, time, icon, color, onPress, event, isLocal }: EventCardProps) => {
   const eventEmoji = getEventEmoji(event);
+  // Use organization color for badge, or COLORS.localbadge for personal events
+  const badgeColor = isLocal ? COLORS.localbadge : (event.color || COLORS.text);
+  
+  // Truncate title to 15 characters
+  const truncatedTitle = title.length > 15 ? `${title.substring(0, 15)}...` : title;
   
   return (
     <TouchableOpacity style={styles.eventCard} onPress={onPress}>
@@ -116,8 +121,8 @@ const EventCard = ({ title, time, icon, color, onPress, event, isLocal }: EventC
       </View>
       <View style={styles.eventDetails}>
         <View style={styles.eventTitleContainer}>
-          <Text style={styles.eventTitle}>{title}</Text>
-          <View style={[styles.eventTypeBadge, { backgroundColor: COLORS.text }]}>
+          <Text style={styles.eventTitle}>{truncatedTitle}</Text>
+          <View style={[styles.eventTypeBadge, { backgroundColor: badgeColor }]}>
             <Text style={styles.eventTypeText}>
               {isLocal ? 'Personal' : event.organizationName && event.organizationName.length > 15 
                 ? `${event.organizationName.substring(0, 12)}...` 
@@ -127,29 +132,46 @@ const EventCard = ({ title, time, icon, color, onPress, event, isLocal }: EventC
         </View>
         <Text style={styles.eventTime}>{time}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={20} color={COLORS.grayDark} />
+      
     </TouchableOpacity>
   );
 };
 
-// Horizontal event card component for past events with emoji support
+// Updated HorizontalEventCard component
 const HorizontalEventCard = ({ title, time, icon, color, onPress, event, isLocal }: HorizontalEventCardProps) => {
   const eventEmoji = getEventEmoji(event);
+  // Use organization color for badge, or COLORS.localbadge for personal events
+  const badgeColor = isLocal ? COLORS.localbadge : (event.color || COLORS.text);
+  
+  // Truncate title to 15 characters
+  const truncatedTitle = title.length > 15 ? `${title.substring(0, 15)}...` : title;
   
   return (
     <TouchableOpacity style={styles.horizontalEventCard} onPress={onPress}>
-      <View style={[styles.horizontalEventIconContainer, { backgroundColor: color }]}>
-        <Text style={styles.horizontalEventIconEmoji}>{eventEmoji}</Text>
+      <View style={styles.horizontalEventHeader}>
+        <View style={[styles.horizontalEventIconContainer, { backgroundColor: color }]}>
+          <Text style={styles.horizontalEventIconEmoji}>{eventEmoji}</Text>
+        </View>
+        <View style={styles.horizontalEventContent}>
+          <View style={styles.horizontalEventTitleRow}>
+            <Text style={styles.horizontalEventTitle} numberOfLines={1}>{truncatedTitle}</Text>
+            <View style={[styles.horizontalEventTypeBadge, { backgroundColor: badgeColor }]}>
+              <Text style={styles.horizontalEventTypeText}>
+                {isLocal ? 'Personal' : event.organizationName && event.organizationName.length > 15 
+                  ? `${event.organizationName.substring(0, 12)}...` 
+                  : event.organizationName || 'Organization'}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.horizontalEventTime} numberOfLines={1}>{time}</Text>
+          <View style={styles.horizontalEventStats}>
+            <Ionicons name="people-outline" size={14} color={COLORS.textLight} />
+            <Text style={styles.horizontalEventAttendees}>
+              {event.attendanceCount || 0} attendees
+            </Text>
+          </View>
+        </View>
       </View>
-      <Text style={styles.horizontalEventTitle} numberOfLines={1}>{title}</Text>
-      <View style={[styles.horizontalEventTypeBadge, { backgroundColor: COLORS.text }]}>
-        <Text style={styles.horizontalEventTypeText}>
-          {isLocal ? 'Personal' : event.organizationName && event.organizationName.length > 15 
-            ? `${event.organizationName.substring(0, 12)}...` 
-            : event.organizationName || 'Organization'}
-        </Text>
-      </View>
-      <Text style={styles.horizontalEventTime} numberOfLines={1}>{time}</Text>
     </TouchableOpacity>
   );
 };
@@ -158,13 +180,11 @@ const HorizontalEventCard = ({ title, time, icon, color, onPress, event, isLocal
 const SpecialistBox = ({ title, count, icon, color, onPress }: SpecialistBoxProps) => (
   <TouchableOpacity style={styles.specialistBox} onPress={onPress}>
     <View style={styles.specialistContent}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.specialistCount}>{count} {count === 1 ? 'event' : 'events'}</Text>
-        <Text style={styles.specialistTitle}>{title}</Text>
-      </View>
-      <View style={[styles.specialistIcon, { backgroundColor: color }]}>
-        <Ionicons name={icon} size={20} color={COLORS.white} />
-      </View>
+      <Text style={styles.specialistCount}>{count} {count === 1 ? 'event' : 'events'}</Text>
+      <Text style={styles.specialistTitle}>{title}</Text>
+    </View>
+    <View style={[styles.specialistIcon, { backgroundColor: color }]}>
+      <Ionicons name={icon} size={20} color={COLORS.white} />
     </View>
   </TouchableOpacity>
 );
@@ -177,6 +197,7 @@ export const HomeScreen = () => {
   const [isNavigationReady, setIsNavigationReady] = useState(false);
   const [organizationCount, setOrganizationCount] = useState(0);
   const [organizationNames, setOrganizationNames] = useState<{[key: string]: string}>({});
+  const [organizationColors, setOrganizationColors] = useState<{[key: string]: string}>({});
   const [refreshing, setRefreshing] = useState(false);
   
   // Get current date for greeting
@@ -226,15 +247,7 @@ export const HomeScreen = () => {
     };
   }, [navigation]);
 
-  // Refresh when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      refreshEvents();
-      return () => {};
-    }, [refreshEvents])
-  );
-
-  // Fetch organization names for all events with organizationId
+  // Fetch organization names and colors for all events with organizationId
   useEffect(() => {
     if (!events.length) return;
     
@@ -245,8 +258,9 @@ export const HomeScreen = () => {
     // Remove duplicates
     const uniqueOrgIds = [...new Set(orgIds)];
     
-    const fetchOrgNames = async () => {
+    const fetchOrgData = async () => {
       const names: {[key: string]: string} = {};
+      const colors: {[key: string]: string} = {};
       
       for (const orgId of uniqueOrgIds) {
         if (orgId) {
@@ -254,6 +268,7 @@ export const HomeScreen = () => {
             const orgDoc = await getDoc(doc(db, 'organizations', orgId));
             if (orgDoc.exists()) {
               names[orgId] = orgDoc.data().name || 'Unknown Organization';
+              colors[orgId] = orgDoc.data().color || COLORS.text;
             }
           } catch (error) {
             console.error('Error fetching organization:', error);
@@ -262,9 +277,10 @@ export const HomeScreen = () => {
       }
       
       setOrganizationNames(names);
+      setOrganizationColors(colors);
     };
     
-    fetchOrgNames();
+    fetchOrgData();
   }, [events]);
 
   // When displaying the scanned today count, use:
@@ -331,9 +347,8 @@ export const HomeScreen = () => {
 
   if (loading && !refreshing) {
     return (
-      <View style={[styles.container]}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Loading dashboard...</Text>
       </View>
     );
   }
@@ -377,8 +392,9 @@ export const HomeScreen = () => {
 
   // Update the EventCard component to use the organization names
   const renderEventCard = (event: any, isLocal: boolean) => {
-    // Get organization name if it exists
+    // Get organization name and color if it exists
     const orgName = event.organizationId ? organizationNames[event.organizationId] : null;
+    const orgColor = event.organizationId ? organizationColors[event.organizationId] : null;
     
     return (
       <EventCard 
@@ -388,7 +404,7 @@ export const HomeScreen = () => {
         icon="calendar-outline"
         color={COLORS.tertiary}
         onPress={() => isNavigationReady && navigation.navigate('AttendanceList', { eventId: event.id })}
-        event={{...event, organizationName: orgName}}
+        event={{...event, organizationName: orgName, color: orgColor}}
         isLocal={isLocal}
       />
     );
@@ -431,18 +447,38 @@ export const HomeScreen = () => {
           >
             {/* Next Up Event Section */}
             <View style={styles.sectionContainer}>
+            <View >
+              <Text style={styles.nextEventText}>Next Event</Text>
+            </View>
               {nextEvent ? (
                 <View style={styles.nextEventContainer}>
                   <View style={styles.nextEventHeader}>
-                    <View style={[styles.nextEventBadge, { backgroundColor: COLORS.primary }]}>
-                      <Text style={styles.nextEventBadgeText}>NEXT EVENT</Text>
+                    <View style={styles.nextEventBadgeContainer}>
+                      
+                      {nextEvent.organizationId && (
+                        <View style={[
+                          styles.nextEventOrgBadge, 
+                          { backgroundColor: organizationColors[nextEvent.organizationId] || COLORS.text }
+                        ]}>
+                          <Text style={styles.nextEventOrgBadgeText}>
+                            {organizationNames[nextEvent.organizationId] || 'Organization'}
+                          </Text>
+                        </View>
+                      )}
+                      {!nextEvent.organizationId && (
+                        <View style={[styles.nextEventOrgBadge, { backgroundColor: COLORS.localbadge }]}>
+                          <Text style={styles.nextEventOrgBadgeText}>Personal</Text>
+                        </View>
+                      )}
                     </View>
                     <Text style={styles.nextEventDate}>{formatDate(nextEvent.startDate)}</Text>
                   </View>
                   <View style={styles.nextEventInfo}>
                     <Text style={styles.nextEventEmoji}>{getEventEmoji(nextEvent)}</Text>
                     <View>
-                      <Text style={styles.nextEventTitle}>{nextEvent.name}</Text>
+                      <Text style={styles.nextEventTitle}>
+                        {nextEvent.name.length > 15 ? `${nextEvent.name.substring(0, 15)}...` : nextEvent.name}
+                      </Text>
                       <Text style={styles.nextEventDescription}>{nextEvent.location}</Text>
                     </View>
                   </View>
@@ -485,39 +521,31 @@ export const HomeScreen = () => {
                   title="Scan IDs"
                   count={events.length}
                   icon="scan-outline"
-                  color={COLORS.secondary}
+                  color={COLORS.red}
                   onPress={handleScanPress}
                 />
                 <SpecialistBox 
                   title="Organizations"
                   count={organizationCount}
                   icon="people"
-                  color={COLORS.secondary}
+                  color={COLORS.blue}
                   onPress={() => navigation.navigate('Organizations')}
                 />
                 <SpecialistBox 
                   title="Create Event"
                   count={events.length}
                   icon="add-circle-outline"
-                  color={COLORS.secondary}
+                  color={COLORS.green}
                   onPress={() => isNavigationReady && navigation.navigate('CreateLocalEvent')}
                 />
                 <SpecialistBox 
                   title="View Events"
                   count={events.length}
                   icon="calendar-outline"
-                  color={COLORS.secondary}
+                  color={COLORS.purple}
                   onPress={() => isNavigationReady && navigation.navigate('EventList')}
                 />
-                <SpecialistBox 
-                  title="No-Go List"
-                  count={0}
-                  icon="list-outline"
-                  color={COLORS.primary}
-                  onPress={() => {
-                    isNavigationReady && navigation.navigate('NoGoList')
-                  }}
-                />
+                
               </View>
             </View>
             
@@ -578,6 +606,7 @@ export const HomeScreen = () => {
                 >
                   {pastEvents.slice(0, 5).map((event) => {
                     const orgName = event.organizationId ? organizationNames[event.organizationId] : null;
+                    const orgColor = event.organizationId ? organizationColors[event.organizationId] : null;
                     
                     return (
                       <HorizontalEventCard 
@@ -587,7 +616,7 @@ export const HomeScreen = () => {
                         icon="time-outline"
                         color={!event.organizationId ? COLORS.tertiary : COLORS.tertiary}
                         onPress={() => isNavigationReady && navigation.navigate('AttendanceList', { eventId: event.id })}
-                        event={{...event, organizationName: orgName}}
+                        event={{...event, organizationName: orgName, color: orgColor}}
                         isLocal={!event.organizationId}
                       />
                     );
@@ -776,6 +805,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
     marginBottom: 12,
+    
   },
   specialistBox: {
     width: '48%',
@@ -784,20 +814,26 @@ const styles = StyleSheet.create({
     padding: 16,
     ...SHADOWS.medium,
     marginBottom: 0,
+    position: 'relative',
+    height: 140,
   },
   specialistContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    width: '100%',
   },
   specialistCount: {
-    fontSize: 14,
-    color: COLORS.textLight,
+    fontSize: 12,
+    fontWeight: 'semibold',
+    color: COLORS.primary,
+    marginBottom: 4,
   },
   specialistTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
-    color: COLORS.text,
-    marginTop: 4,
+    color: COLORS.primary,
+    marginBottom: 8,
+    zIndex: 2,
   },
   specialistIcon: {
     width: 30,
@@ -805,6 +841,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    zIndex: 1,
   },
   fab: {
     position: 'absolute',
@@ -863,17 +903,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
+  nextEventBadgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   nextEventBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
-    marginBottom: 20,
   },
-  nextEventBadgeText: {
-    color: COLORS.white,
-    fontSize: 10,
+  nextEventText: {
+    color: COLORS.primary,
+    fontSize: 18,
     fontWeight: 'bold',
-    
+    marginBottom: 10,
   },
   nextEventDate: {
     fontSize: 14,
@@ -915,33 +959,80 @@ const styles = StyleSheet.create({
   horizontalScrollContainer: {
     paddingVertical: 12,
     paddingRight: 16,
-    paddingLeft: 16,
+    paddingLeft: 0,
+    
+    
   },
   horizontalEventCard: {
     backgroundColor: COLORS.white,
     borderRadius: 12,
-    padding: 12,
+    padding: 16,
     marginRight: 12,
-    width: 150,
+    width: 250,
     ...SHADOWS.medium,
   },
+  horizontalEventHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   horizontalEventIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginRight: 12,
+  },
+  horizontalEventContent: {
+    flex: 1,
+  },
+  horizontalEventTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
   },
   horizontalEventTitle: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
     color: COLORS.text,
+    flex: 1,
+    marginRight: 4,
     marginBottom: 4,
   },
   horizontalEventTime: {
     fontSize: 12,
     color: COLORS.textLight,
+    marginBottom: 6,
+  },
+  horizontalEventIconEmoji: {
+    fontSize: 18,
+    color: COLORS.white
+  },
+  horizontalEventTypeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  horizontalEventTypeText: {
+    fontSize: 12,
+    color: COLORS.white,
+    fontWeight: '500',
+  },
+  horizontalEventStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+  },
+  horizontalEventAttendees: {
+    marginLeft: 4,
+    fontSize: 12,
+    color: COLORS.textLight,
+    fontWeight: '500',
   },
   emptyPastEventsContainer: {
     padding: 16,
@@ -952,10 +1043,6 @@ const styles = StyleSheet.create({
   },
   eventIconEmoji: {
     fontSize: 22, 
-    color: COLORS.white
-  },
-  horizontalEventIconEmoji: {
-    fontSize: 18,
     color: COLORS.white
   },
   nextEventInfo: {
@@ -1002,6 +1089,7 @@ const styles = StyleSheet.create({
   },
   eventCategoryContainer: {
     marginBottom: 16,
+
   },
   eventCategoryTitle: {
     fontSize: 14,
@@ -1026,16 +1114,20 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: '500',
   },
-  horizontalEventTypeBadge: {
-    paddingHorizontal: 6,
+  nextEventOrgBadge: {
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 10,
-    alignSelf: 'flex-start',
-    marginBottom: 4,
+    borderRadius: 12,
   },
-  horizontalEventTypeText: {
-    fontSize: 10,
+  nextEventOrgBadgeText: {
+    fontSize: 12,
     color: COLORS.white,
     fontWeight: '500',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
   },
 }); 

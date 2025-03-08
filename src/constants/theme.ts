@@ -3,6 +3,14 @@ export const COLORS = {
   primaryDark: '#171717', // Darker blue
   primaryLight: '#5DADE2', // Lighter blue
 
+  red: '#E23838', // Red
+  orange:  '#F78200', // Orange
+  yellow:  '#FFB900', // Yellow
+  green:  '#5EBD3E', // Green
+  blue:  '#009CDF', // Blue
+  purple:  '#973999', // Purple
+  pink:  '#ff6ec7', // Pink
+
   secondary: '#000', // Dark gray / near black
   secondaryDark: '#1C1C1C', // Darker gray
   secondaryLight: '#555555', // Lighter gray
@@ -16,7 +24,7 @@ export const COLORS = {
   success: '#28A745', // Green for success messages
   danger: '#DC3545',  // Red for error messages
   warning: '#FFC107', // Yellow for warnings
-  localbadge: '#2d6fe0',
+  localbadge: '#000',
 
   text: '#222831',
   textLight: '#757575',

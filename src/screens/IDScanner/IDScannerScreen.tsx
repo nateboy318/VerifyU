@@ -257,20 +257,56 @@ export const IDScannerScreen = () => {
         return;
       }
 
-      // If we have an event ID, mark attendance for that event
-      if (eventId) {
-        await markAttendance(
-          eventId,
-          id,
-          currentUser.uid,
-          'present',
-          `Name: ${name}`,
-          finalImagePath
-        );
-
-        // Navigate back to attendance list
-        navigation.navigate('AttendanceList', { eventId });
-      }
+      // Show confirmation dialog
+      Alert.alert(
+        'Confirm Attendance',
+        `Add attendance for:\nName: ${name}\nID: ${id}`,
+        [
+          {
+            text: 'Rescan',
+            style: 'cancel',
+            onPress: () => {
+              setScanning(false);
+              setOcrProgress('');
+              setCroppedPhoto(null);
+            }
+          },
+          {
+            text: 'Add',
+            onPress: async () => {
+              try {
+                await markAttendance(
+                  eventId,
+                  id,
+                  currentUser.uid,
+                  'present',
+                  `Name: ${name}`,
+                  finalImagePath
+                );
+                
+                // Show success message
+                Alert.alert(
+                  'Success',
+                  'Attendance marked successfully',
+                  [
+                    {
+                      text: 'OK',
+                      onPress: () => {
+                        setScanning(false);
+                        setOcrProgress('');
+                        setCroppedPhoto(null);
+                      }
+                    }
+                  ]
+                );
+              } catch (error) {
+                console.error('Error marking attendance:', error);
+                Alert.alert('Error', 'Failed to mark attendance. Please try again.');
+              }
+            }
+          }
+        ]
+      );
     } catch (error) {
       console.error('Error processing OCR result:', error);
       Alert.alert('Error', 'Failed to process the ID card. Please try again.');

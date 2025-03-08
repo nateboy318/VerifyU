@@ -34,7 +34,10 @@
         "NSCameraUsageDescription": "Cardinal Scanner uses the camera to scan student IDs for attendance tracking.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.nateroyal1.cardinalscanner"
+      "bundleIdentifier": "com.nateroyal1.cardinalscanner",
+      "entitlements": {
+        "com.apple.developer.applesignin": ["Default"]
+      }
     },
     "android": {
       "adaptiveIcon": {

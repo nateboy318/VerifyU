@@ -51,9 +51,21 @@ export class VisionService {
             let confidence = 0;
             const doc = nlp(line);
             
-            // Use NLP to identify person names
-            const hasPersonName = doc.match('#Person+').found;
+            // Use compromise's built-in person detection
+            // Note: This is less accurate than using a dedicated plugin but works without additional dependencies
+            const hasPersonName = doc.match('#Person').found || doc.match('#FirstName #LastName').found;
             if (hasPersonName) confidence += 0.5;
+            
+            // Advanced name pattern matching (common in IDs)
+            const namePatterns = [
+                /^[A-Z][a-z]+ [A-Z][a-z]+$/,  // Simple "First Last"
+                /^[A-Z][a-z]+ [A-Z]\.? [A-Z][a-z]+$/,  // With middle initial
+                /Name:\s*([A-Z][a-z]+(?: [A-Z][a-z]+)+)/i  // With "Name:" prefix
+            ];
+            
+            if (namePatterns.some(pattern => pattern.test(line))) {
+                confidence += 0.4;
+            }
             
             // Check for name indicators
             if (NAME_INDICATORS.some(indicator => 

@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS, SIZES, SHADOWS } from '../constants/theme';
 import { Event, Organization } from '../types/organization';
@@ -41,6 +41,18 @@ const OrganizationDetailsScreen = () => {
       console.error('Error loading events:', error);
     }
   }, [organization.id]);
+
+  // Use useFocusEffect to reload events when the screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      // Load events when screen comes into focus
+      loadEvents();
+      
+      return () => {
+        // Optional cleanup function
+      };
+    }, [loadEvents])
+  );
 
   // Initial load
   useEffect(() => {
@@ -115,7 +127,7 @@ const OrganizationDetailsScreen = () => {
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
       
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: COLORS.white }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
@@ -184,7 +196,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: COLORS.white,
-    ...SHADOWS.medium,
   },
   backButton: {
     width: 44,
