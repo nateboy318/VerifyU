@@ -27,6 +27,7 @@ import {
     enableIndexedDbPersistence,
     getDoc,
     increment,
+    addDoc,
 } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import 'react-native-get-random-values';
@@ -110,111 +111,109 @@ export const createOrganization = async (
     return organization;
 };
 
-export const joinOrganization = async (
-    joinCode: string,
-    userId: string
-): Promise<JoinCodeResponse> => {
-    const q = query(
-        organizationsRef,
-        where('joinCode', '==', joinCode)
+export const joinOrganization = async (joinCode: string, userId: string): Promise<Organization | null> => {
+  try {
+    console.log('Attempting to join organization with code:', joinCode);
+    
+    // Find the organization with this join code
+    const orgsQuery = query(
+      organizationsRef,
+      where('joinCode', '==', joinCode)
     );
-
-    const snapshot = await getDocs(q);
-
+    
+    const snapshot = await getDocs(orgsQuery);
+    
     if (snapshot.empty) {
-        return { success: false, error: 'Invalid join code' };
+      console.log('No organization found with join code:', joinCode);
+      return null; // No organization found with this code
     }
-
-    const organization = snapshot.docs[0].data() as Organization;
-
-    if (organization.members.includes(userId)) {
-        return { success: false, error: 'Already a member of this organization' };
+    
+    const orgDoc = snapshot.docs[0];
+    const organization = { ...orgDoc.data(), id: orgDoc.id } as Organization;
+    
+    console.log('Found organization:', organization.name);
+    
+    // Check if user is already a member
+    if (organization.members && organization.members.includes(userId)) {
+      console.log('User is already a member of this organization');
+      return organization; // User is already a member
     }
-
+    
+    // Update organization members
     const orgRef = doc(organizationsRef, organization.id);
-    const userRef = doc(usersRef, userId);
-
     await updateDoc(orgRef, {
-        members: arrayUnion(userId),
+      members: arrayUnion(userId)
     });
-
-    await updateDoc(userRef, {
-        organizations: arrayUnion(organization.id),
-    });
-
-    return { success: true, organization };
+    console.log('Added user to organization members');
+    
+    // Update user's organizations array - FIXED VERSION
+    try {
+      const userRef = doc(usersRef, userId);
+      const userDoc = await getDoc(userRef);
+      
+      if (userDoc.exists()) {
+        await updateDoc(userRef, {
+          organizations: arrayUnion(organization.id)
+        });
+        console.log('Added organization to user document');
+      } else {
+        // Create user document if it doesn't exist
+        await setDoc(userRef, {
+          id: userId,
+          organizations: [organization.id]
+        });
+        console.log('Created new user document with organization');
+      }
+    } catch (userError) {
+      console.error('Error updating user document:', userError);
+      // Continue anyway since the user is already added to org
+    }
+    
+    console.log('Successfully joined organization');
+    return organization;
+  } catch (error) {
+    console.error('Error joining organization:', error);
+    throw error;
+  }
 };
 
-export const createEvent = async (
-    eventData: Partial<Event>,
-    userId: string,
-    organizationId?: string
-): Promise<Event> => {
-    console.log('Creating event with data:', { eventData, userId, organizationId });
-
-    // Create the event object with all required fields
-    const event: Event = {
-        id: uuidv4(),
-        name: eventData.name || '',
-        startDate: eventData.startDate || new Date().toISOString(),
-        endDate: eventData.endDate || eventData.startDate || new Date().toISOString(),
-        date: eventData.startDate || new Date().toISOString(),
-        createdBy: userId,
-        createdAt: new Date().toISOString(),
-        isActive: true,
-        attendanceCount: 0,
-        // Optional fields
-        description: eventData.description || undefined,
-        location: eventData.location || undefined,
-        organizationId: organizationId || null // Changed undefined to null to match query
-    };
-
-    // Remove any undefined values before saving to Firestore
-    const cleanEvent = Object.fromEntries(
-        Object.entries(event).filter(([_, value]) => value !== undefined)
+export const createEvent = async (eventData: any, userId: string, organizationId?: string) => {
+  try {
+    const eventsCollection = collection(db, 'events');
+    
+    // Remove undefined values from eventData
+    const cleanEventData = Object.fromEntries(
+      Object.entries(eventData).filter(([_, value]) => value !== undefined)
     );
-
-    console.log('Event to be created:', {
-        ...cleanEvent,
-        path: `events/${event.id}`,
-        hasOrganizationId: cleanEvent.organizationId !== undefined,
-        organizationId: cleanEvent.organizationId
-    });
-
-    try {
-        // Create the event document
-        const eventRef = doc(eventsRef, event.id);
-        await setDoc(eventRef, cleanEvent);
-        console.log('Event document created successfully:', event.id);
-
-        // Verify the event was created
-        const createdEventDoc = await getDoc(eventRef);
-        console.log('Verification - Event exists:', createdEventDoc.exists());
-        console.log('Verification - Event data:', createdEventDoc.data());
-
-        // If this is an organization event, update the organization's events array
-        if (organizationId) {
-            const orgRef = doc(organizationsRef, organizationId);
-            await updateDoc(orgRef, {
-                events: arrayUnion(event.id)
-            });
-            console.log('Organization events array updated for:', organizationId);
-        }
-
-        // Create an empty attendance collection for this event with metadata
-        const eventAttendanceRef = collection(db, `events/${event.id}/attendance`);
-        const metadataRef = doc(eventAttendanceRef, 'metadata');
-        await setDoc(metadataRef, {
-            totalAttendees: 0,
-            lastUpdated: Date.now()
-        });
-        console.log('Event attendance metadata created');
-
-        return cleanEvent as Event;
-    } catch (error) {
-        console.error('Error creating event:', error);
-        throw error;
-    }
+    
+    const newEvent = {
+      // Default values for required fields
+      name: '',
+      startDate: '',
+      endDate: '',
+      isActive: true,
+      // Override with cleaned data
+      ...cleanEventData,
+      // Add additional fields
+      createdBy: userId,
+      createdAt: new Date().toISOString(),
+      date: eventData.startDate || '',
+      organizationId: organizationId || null,
+      attendanceCount: 0,
+      emoji: eventData.emoji || '📅'
+    };
+    
+    console.log('Saving event with emoji:', newEvent.emoji);
+    
+    const docRef = await addDoc(eventsCollection, newEvent);
+    return {
+      id: docRef.id,
+      ...newEvent
+    };
+  } catch (error) {
+    console.error('Error creating event:', error);
+    throw error;
+  }
 };
 
 export const markAttendance = async (
@@ -271,6 +270,25 @@ export const markAttendance = async (
     }
 };
 
+export const getOrganizationById = async (organizationId: string): Promise<Organization | null> => {
+    try {
+      const orgRef = doc(db, 'organizations', organizationId);
+      const orgDoc = await getDoc(orgRef);
+      
+      if (orgDoc.exists()) {
+        return {
+          id: orgDoc.id,
+          ...orgDoc.data()
+        } as Organization;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error fetching organization:', error);
+      throw error;
+    }
+  };
+
 export const getEventDetails = async (eventId: string): Promise<{ event: Event; attendance: Attendance[] }> => {
     // Get event details
     const eventRef = doc(eventsRef, eventId);
@@ -301,28 +319,50 @@ export const getEventDetails = async (eventId: string): Promise<{ event: Event; 
 };
 
 export const getOrganizationEvents = async (organizationId: string): Promise<Event[]> => {
-    const q = query(
-        eventsRef,
-        where('organizationId', '==', organizationId),
-        orderBy('startDate', 'desc')
+  try {
+    console.log('Fetching events for organization:', organizationId);
+    
+    // Query all events for this organization
+    const eventsQuery = query(
+      eventsRef,
+      where('organizationId', '==', organizationId),
+      orderBy('startDate', 'desc')
     );
-
-    const snapshot = await getDocs(q);
-    const events = snapshot.docs.map(doc => doc.data() as Event);
-
-    // For each event, get its attendance metadata
+    
+    const eventsSnapshot = await getDocs(eventsQuery);
+    console.log('Found events:', eventsSnapshot.size);
+    
+    // Map the events data
+    const events = eventsSnapshot.docs.map(doc => ({
+      ...doc.data(),
+      id: doc.id
+    } as Event));
+    
+    // Get attendance counts for each event
     const eventsWithAttendance = await Promise.all(events.map(async (event) => {
+      try {
         const metadataRef = doc(db, `events/${event.id}/attendance/metadata`);
         const metadataDoc = await getDoc(metadataRef);
         const metadata = metadataDoc.data() || { totalAttendees: 0 };
-
+        
         return {
-            ...event,
-            attendanceCount: metadata.totalAttendees
+          ...event,
+          attendanceCount: metadata.totalAttendees || 0
         };
+      } catch (error) {
+        console.error(`Error getting attendance for event ${event.id}:`, error);
+        return {
+          ...event,
+          attendanceCount: 0
+        };
+      }
     }));
-
+    
     return eventsWithAttendance;
+  } catch (error) {
+    console.error('Error in getOrganizationEvents:', error);
+    throw error;
+  }
 };
 
 export const getEventAttendance = async (eventId: string): Promise<Attendance[]> => {
@@ -345,41 +385,22 @@ export const getUserEvents = async (userId: string): Promise<Event[]> => {
     try {
         console.log('getUserEvents - Starting fetch for user:', userId);
 
-        // Get ALL events where user is the creator (both local and org events)
+        // Get user's organizations first
+        const userDoc = await getDoc(doc(usersRef, userId));
+        const userData = userDoc.data() as User;
+        const userOrganizations = userData?.organizations || [];
+        
+        console.log('User organizations:', userOrganizations);
+
+        // Get all events created by the user
         const createdEventsQuery = query(
             eventsRef,
             where('createdBy', '==', userId)
         );
 
-        console.log('getUserEvents - Created events query parameters:', {
-            collection: 'events',
-            filters: [
-                { field: 'createdBy', operator: '==', value: userId }
-            ]
-        });
-
-        // Get user's organizations first
-        const userDoc = await getDoc(doc(usersRef, userId));
-        console.log('getUserEvents - User document:', userDoc.exists() ? 'exists' : 'does not exist');
-        const userData = userDoc.data() as User;
-        console.log('getUserEvents - User data:', userData);
-        const userOrganizations = userData?.organizations || [];
-
-        // Get events created by the user
-        console.log('getUserEvents - Fetching created events');
         let createdEvents: Event[] = [];
         try {
             const createdEventsSnapshot = await getDocs(createdEventsQuery);
-            console.log('getUserEvents - Created events snapshot:', {
-                empty: createdEventsSnapshot.empty,
-                size: createdEventsSnapshot.size,
-                docs: createdEventsSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    exists: doc.exists(),
-                    data: doc.data()
-                }))
-            });
-
             createdEvents = createdEventsSnapshot.docs.map(doc => ({
                 ...doc.data(),
                 id: doc.id
@@ -388,15 +409,13 @@ export const getUserEvents = async (userId: string): Promise<Event[]> => {
             console.error('Error fetching created events:', error);
         }
 
-        // Get events from organizations (excluding ones already fetched)
+        // Get ALL organization events for organizations the user is a member of
         let orgEvents: Event[] = [];
         if (userOrganizations.length > 0) {
             try {
                 const organizationEventsQuery = query(
                     eventsRef,
                     where('organizationId', 'in', userOrganizations),
-                    where('createdBy', '!=', userId), // Exclude events we already have
-                    orderBy('createdBy'), // Required for != query
                     orderBy('startDate', 'desc')
                 );
 
@@ -410,8 +429,12 @@ export const getUserEvents = async (userId: string): Promise<Event[]> => {
             }
         }
 
+        // Remove duplicates (events that might be in both queries)
+        const createdEventIds = new Set(createdEvents.map(e => e.id));
+        const uniqueOrgEvents = orgEvents.filter(event => !createdEventIds.has(event.id));
+
         // Combine and sort all events
-        const allEvents = [...createdEvents, ...orgEvents].sort((a, b) =>
+        const allEvents = [...createdEvents, ...uniqueOrgEvents].sort((a, b) =>
             new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
         );
 
@@ -438,14 +461,8 @@ export const getUserEvents = async (userId: string): Promise<Event[]> => {
         console.log('getUserEvents - Final results:', {
             createdEventsCount: createdEvents.length,
             orgEventsCount: orgEvents.length,
-            totalEventsCount: eventsWithAttendance.length,
-            events: eventsWithAttendance.map(e => ({
-                id: e.id,
-                name: e.name,
-                createdBy: e.createdBy,
-                organizationId: e.organizationId,
-                startDate: e.startDate
-            }))
+            uniqueOrgEventsCount: uniqueOrgEvents.length,
+            totalEventsCount: eventsWithAttendance.length
         });
 
         return eventsWithAttendance;
@@ -498,4 +515,194 @@ export const logOut = async (): Promise<void> => {
     await signOut(auth);
 };
 
-export { auth, db }; 
+export { auth, db };
+
+// Add this function to debug events
+export const debugOrganizationEvents = async (organizationId: string): Promise<void> => {
+  try {
+    console.log(`Debugging events for organization: ${organizationId}`);
+    
+    // Get the organization
+    const orgDoc = await getDoc(doc(organizationsRef, organizationId));
+    if (!orgDoc.exists()) {
+      console.log('Organization not found');
+      return;
+    }
+    
+    const organization = { ...orgDoc.data(), id: orgDoc.id } as Organization;
+    console.log('Organization:', {
+      id: organization.id,
+      name: organization.name,
+      members: organization.members.length,
+      events: organization.events?.length || 0
+    });
+    
+    // Check events in the organization's events array
+    if (organization.events && organization.events.length > 0) {
+      console.log(`Organization has ${organization.events.length} events in its events array`);
+      
+      for (const eventId of organization.events) {
+        const eventDoc = await getDoc(doc(eventsRef, eventId));
+        if (eventDoc.exists()) {
+          const eventData = eventDoc.data();
+          console.log(`Event ${eventId}:`, {
+            name: eventData.name,
+            organizationId: eventData.organizationId,
+            hasCorrectOrgId: eventData.organizationId === organizationId
+          });
+          
+          // Fix the event if organizationId is missing or incorrect
+          if (eventData.organizationId !== organizationId) {
+            console.log(`Fixing organizationId for event ${eventId}`);
+            await updateDoc(doc(eventsRef, eventId), {
+              organizationId: organizationId
+            });
+          }
+        } else {
+          console.log(`Event ${eventId} not found`);
+        }
+      }
+    } else {
+      console.log('Organization has no events');
+    }
+    
+    // Check events with organizationId field
+    const eventsQuery = query(
+      eventsRef,
+      where('organizationId', '==', organizationId)
+    );
+    
+    const eventsSnapshot = await getDocs(eventsQuery);
+    console.log(`Found ${eventsSnapshot.size} events with organizationId field set to this organization`);
+    
+    eventsSnapshot.docs.forEach(docSnapshot => {
+      const eventData = docSnapshot.data();
+      console.log(`Event ${docSnapshot.id}:`, {
+        name: eventData.name,
+        inOrgEventsArray: organization.events?.includes(docSnapshot.id) || false
+      });
+      
+      // Add event to organization's events array if missing
+      if (organization.events && !organization.events.includes(docSnapshot.id)) {
+        console.log(`Adding event ${docSnapshot.id} to organization's events array`);
+        (async () => {
+          await updateDoc(doc(organizationsRef, organizationId), {
+            events: arrayUnion(docSnapshot.id)
+          });
+        })();
+      }
+    });
+  } catch (error) {
+    console.error('Error debugging organization events:', error);
+  }
+};
+
+export const fixAllOrganizationEvents = async (): Promise<void> => {
+  try {
+    console.log('Starting organization events fix');
+    
+    // 1. Get all events with organizationId field
+    const eventsWithOrgQuery = query(
+      eventsRef,
+      where('organizationId', '!=', null)
+    );
+    
+    let eventsWithOrg: Event[] = [];
+    try {
+      const eventsSnapshot = await getDocs(eventsWithOrgQuery);
+      eventsWithOrg = eventsSnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      } as Event));
+      console.log(`Found ${eventsWithOrg.length} events with organizationId`);
+    } catch (error) {
+      console.error('Error querying events with organizationId:', error);
+      // If the != null query fails, try a different approach
+      const allEventsSnapshot = await getDocs(eventsRef);
+      eventsWithOrg = allEventsSnapshot.docs
+        .map(doc => ({ ...doc.data(), id: doc.id } as Event))
+        .filter(event => event.organizationId);
+      console.log(`Found ${eventsWithOrg.length} events with organizationId (alternative method)`);
+    }
+    
+    // 2. Group events by organizationId
+    const eventsByOrg: Record<string, Event[]> = {};
+    for (const event of eventsWithOrg) {
+      if (!event.organizationId) continue;
+      
+      if (!eventsByOrg[event.organizationId]) {
+        eventsByOrg[event.organizationId] = [];
+      }
+      eventsByOrg[event.organizationId].push(event);
+    }
+    
+    // 3. Process each organization
+    for (const [orgId, orgEvents] of Object.entries(eventsByOrg)) {
+      console.log(`Processing organization ${orgId} with ${orgEvents.length} events`);
+      
+      // Get the organization
+      const orgDoc = await getDoc(doc(organizationsRef, orgId));
+      if (!orgDoc.exists()) {
+        console.log(`Organization ${orgId} not found, creating it`);
+        // Create a placeholder organization if it doesn't exist
+        await setDoc(doc(organizationsRef, orgId), {
+          id: orgId,
+          name: 'Auto-created Organization',
+          members: [],
+          admins: [],
+          events: [],
+          createdAt: new Date().toISOString()
+        });
+      }
+      
+      // Update organization's events array
+      const eventIds = orgEvents.map(e => e.id);
+      await updateDoc(doc(organizationsRef, orgId), {
+        events: eventIds
+      });
+      
+      // Get all members of this organization
+      const orgData = orgDoc.exists() ? orgDoc.data() : { members: [] };
+      const members = orgData.members || [];
+      
+      // Update each member's organizations array
+      for (const memberId of members) {
+        const userRef = doc(usersRef, memberId);
+        const userDoc = await getDoc(userRef);
+        
+        if (userDoc.exists()) {
+          console.log(`Updating user ${memberId} with organization ${orgId}`);
+          await updateDoc(userRef, {
+            organizations: arrayUnion(orgId)
+          });
+        }
+      }
+    }
+    
+    // 4. Fix all users' organizations arrays
+    const usersSnapshot = await getDocs(usersRef);
+    for (const userDoc of usersSnapshot.docs) {
+      const userId = userDoc.id;
+      
+      // Find all organizations where this user is a member
+      const userOrgsQuery = query(
+        organizationsRef,
+        where('members', 'array-contains', userId)
+      );
+      
+      const userOrgsSnapshot = await getDocs(userOrgsQuery);
+      const userOrgIds = userOrgsSnapshot.docs.map(doc => doc.id);
+      
+      if (userOrgIds.length > 0) {
+        console.log(`User ${userId} belongs to ${userOrgIds.length} organizations`);
+        await updateDoc(doc(usersRef, userId), {
+          organizations: userOrgIds
+        });
+      }
+    }
+    
+    console.log('Organization events fix completed');
+  } catch (error) {
+    console.error('Error fixing organization events:', error);
+  }
+}; 

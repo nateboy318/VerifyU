@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,13 +8,15 @@ import {
   SafeAreaView,
   StatusBar,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, SIZES, SHADOWS } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useEvents } from '../../context/EventContext';
 import { getEventEmoji } from '../../utils/emojiUtils';
+import { format } from 'date-fns';
 
 // Helper function to format dates to mm/dd/yy x:xxpm/am
 const formatDate = (dateString: string | undefined): string => {
@@ -48,11 +50,8 @@ const formatDate = (dateString: string | undefined): string => {
 
 export const EventListScreen = ({ route }: any) => {
   const navigation = useNavigation() as any;
-  const { events, deleteEvent, loading } = useEvents();
-  
-  // Add debug logging
-  console.log('EventListScreen - All events from context:', events);
-  console.log('EventListScreen - Number of events:', events.length);
+  const { events, deleteEvent, loading, refreshEvents } = useEvents();
+  const [refreshing, setRefreshing] = useState(false);
   
   // Filter for past events if filter parameter is provided
   const filterType = route?.params?.filter;
@@ -71,35 +70,29 @@ export const EventListScreen = ({ route }: any) => {
       }).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
     : events.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
 
-  // Add debug logging for filtered events
-  console.log('EventListScreen - Filtered events:', filteredEvents);
-  console.log('EventListScreen - Number of filtered events:', filteredEvents.length);
-  console.log('EventListScreen - Filter type:', filterType);
-
-  // Log details of each event
-  filteredEvents.forEach((event, index) => {
-    console.log(`Event ${index + 1}:`, {
-      id: event.id,
-      name: event.name,
-      startDate: event.startDate,
-      organizationId: event.organizationId,
-      createdBy: event.createdBy,
-      isLocal: !event.organizationId
-    });
-  });
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refreshEvents();
+    setRefreshing(false);
+  }, [refreshEvents]);
 
   const handleDeleteEvent = (id: string, name: string) => {
     Alert.alert(
       'Delete Event',
-      `Are you sure you want to delete "${name}"?`,
+      `Are you sure you want to delete "${name}"? This action cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
           text: 'Delete', 
-          style: 'destructive', 
-          onPress: () => {
-            deleteEvent(id);
-            Alert.alert('Success', 'Event deleted successfully');
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteEvent(id);
+              Alert.alert('Success', 'Event deleted successfully');
+            } catch (error) {
+              console.error('Error deleting event:', error);
+              Alert.alert('Error', 'Failed to delete event');
+            }
           }
         }
       ]
@@ -179,7 +172,7 @@ export const EventListScreen = ({ route }: any) => {
     );
   };
 
-  if (loading) {
+  if (loading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -202,42 +195,46 @@ export const EventListScreen = ({ route }: any) => {
         </Text>
         <TouchableOpacity 
           style={styles.backButton}
-          onPress={() => navigation.navigate('CreateEvent')}
+          onPress={() => navigation.navigate('CreateLocalEvent')}
         >
           <Ionicons name="add-circle" size={24} color={COLORS.white} />
         </TouchableOpacity>
       </View>
       
       {/* Events List */}
-      {filteredEvents.length > 0 ? (
-        <FlatList
-          data={filteredEvents}
-          keyExtractor={(item) => item.id}
-          renderItem={renderEventItem}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-        />
-      ) : (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="calendar-outline" size={80} color={COLORS.grayLight} />
-          <Text style={styles.emptyTitle}>
-            {filterType === 'past' ? 'No Past Events' : filterType === 'upcoming' ? 'No Upcoming Events' : 'No Events Found'}
-          </Text>
-          <Text style={styles.emptyText}>
-            {filterType === 'past' 
-              ? 'You have no past events to display.' 
-              : filterType === 'upcoming'
-              ? 'You have no upcoming events to display.'
-              : 'You haven\'t created any events yet.'}
-          </Text>
-          <TouchableOpacity 
-            style={styles.createButton}
-            onPress={() => navigation.navigate('CreateEvent')}
-          >
-            <Text style={styles.createButtonText}>Create New Event</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      <FlatList
+        data={filteredEvents}
+        renderItem={renderEventItem}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.eventsList}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
+          />
+        }
+        ListEmptyComponent={() => (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="calendar-outline" size={80} color={COLORS.grayLight} />
+            <Text style={styles.emptyTitle}>No Events Found</Text>
+            <Text style={styles.emptyText}>
+              {filterType === 'past' 
+                ? "You don't have any past events." 
+                : filterType === 'upcoming'
+                ? "You don't have any upcoming events."
+                : "You haven't created any events yet."}
+            </Text>
+            <TouchableOpacity 
+              style={styles.createButton}
+              onPress={() => navigation.navigate('CreateLocalEvent')}
+            >
+              <Text style={styles.createButtonText}>Create New Event</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      />
     </SafeAreaView>
   );
 };
@@ -275,7 +272,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 22,
   },
-  listContent: {
+  eventsList: {
     padding: 16,
     paddingBottom: 32,
   },

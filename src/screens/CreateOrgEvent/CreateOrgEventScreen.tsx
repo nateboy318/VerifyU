@@ -229,7 +229,8 @@ export const CreateEventScreen = () => {
         startDate: eventDateTime.toISOString(),
         endDate: eventDateTime.toISOString(), // You might want to add end date picker
         description: eventDescription.trim() || undefined,
-        isActive: true
+        isActive: true,
+        emoji: selectedEmoji
       };
 
       await createEvent(newEventData, currentUser.uid, organization.id);

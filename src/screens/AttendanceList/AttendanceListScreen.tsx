@@ -22,7 +22,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { Attendance, Organization } from '../../types/organization';
 import { COLORS, SIZES, SHADOWS } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { getEventDetails, getEventAttendance, markAttendance } from '../../services/firebase';
+import { getEventDetails, getEventAttendance, markAttendance, getOrganizationById } from '../../services/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Configure layout animations for Android
@@ -53,14 +53,31 @@ export const AttendanceListScreen = () => {
   }, [eventId]);
 
   useEffect(() => {
-    if (route.params?.organization) {
-      setOrganization(route.params.organization);
-    } else {
-      Alert.alert('Error', 'Organization data not found', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
+    // Only check for organization if this is an organization event
+    if (event && event.organizationId) {
+      if (route.params?.organization) {
+        setOrganization(route.params.organization);
+      } else {
+        // Instead of showing an error, try to fetch the organization data
+        const fetchOrganization = async () => {
+          try {
+            // Assuming you have a function to get organization by ID
+            const orgData = await getOrganizationById(event.organizationId);
+            if (orgData) {
+              setOrganization(orgData);
+            }
+          } catch (error) {
+            console.error('Error fetching organization:', error);
+            // Only show error if we really need the organization data
+            // For now, let's just log it and continue
+          }
+        };
+        
+        fetchOrganization();
+      }
     }
-  }, [route.params?.organization]);
+    // If it's a local event or doesn't have an organizationId, we don't need organization data
+  }, [route.params?.organization, event]);
 
   const loadEventData = async () => {
     if (!eventId) return;

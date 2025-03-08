@@ -31,6 +31,8 @@ export interface Event {
     isActive: boolean;
     attendanceCount: number;
     attendees?: any[];
+    noGoList?: string[]; // Add this new property
+    emoji?: string; // Add this field
 }
 
 export interface Attendance {

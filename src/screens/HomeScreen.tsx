@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Image,
   Platform,
+  RefreshControl,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { COLORS, SIZES, SHADOWS } from '../constants/theme';
@@ -170,16 +171,27 @@ const SpecialistBox = ({ title, count, icon, color, onPress }: SpecialistBoxProp
 
 export const HomeScreen = () => {
   const navigation = useNavigation() as any;
-  const { events, loading, error, getAttendanceCountForToday } = useEvents();
+  const { events, loading, error, refreshEvents } = useEvents();
   const { user } = useAuth();
   
   const [isNavigationReady, setIsNavigationReady] = useState(false);
   const [organizationCount, setOrganizationCount] = useState(0);
   const [organizationNames, setOrganizationNames] = useState<{[key: string]: string}>({});
+  const [refreshing, setRefreshing] = useState(false);
   
   // Get current date for greeting
   const currentHour = new Date().getHours();
   const greeting = currentHour < 12 ? 'Good Morning' : currentHour < 18 ? 'Good Afternoon' : 'Good Evening';
+
+  // Handle pull-to-refresh
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refreshEvents();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshEvents]);
 
   // Get user's organizations count
   useEffect(() => {
@@ -214,64 +226,13 @@ export const HomeScreen = () => {
     };
   }, [navigation]);
 
-  // Add a refresh state and useEffect to ensure scanned count updates
-  const [refreshKey, setRefreshKey] = useState(0);
-  
-  // Function to calculate today's scan count
-  const getTodaysScanCount = useCallback(() => {
-    return getAttendanceCountForToday();
-  }, [getAttendanceCountForToday, refreshKey]);
-  
-  // Set up a refresh interval
-  useEffect(() => {
-    // Update the scanned count every minute
-    const intervalId = setInterval(() => {
-      setRefreshKey(prevKey => prevKey + 1);
-    }, 60000); // 1 minute refresh
-    
-    // Clean up interval on unmount
-    return () => clearInterval(intervalId);
-  }, []);
-  
-  // Also refresh when focusing the screen
+  // Refresh when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      // Trigger refresh when screen comes into focus
-      setRefreshKey(prevKey => prevKey + 1);
+      refreshEvents();
       return () => {};
-    }, [])
+    }, [refreshEvents])
   );
-  
-  // When displaying the scanned today count, use:
-  const scannedToday = getTodaysScanCount();
-
-  // Handler for when "Scan IDs" is pressed
-  const handleScanPress = () => {
-    if (!isNavigationReady) return;
-    
-    if (events.length === 0) {
-      // No events exist, prompt to create one first
-      Alert.alert(
-        'No Events Found',
-        'You need to create an event before scanning IDs. Would you like to create an event now?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Create Event', 
-            onPress: () => navigation.navigate('CreateLocalEvent')
-          }
-        ]
-      );
-    } else if (events.length === 1) {
-      // Only one event exists, use it automatically
-      navigation.navigate('IDScanner', { eventId: events[0].id });
-    } else {
-      // Multiple events exist, show event list for selection
-      navigation.navigate('EventList');
-    }
-  };
-
-  const { importNoGoList } = useNoGoList();
 
   // Fetch organization names for all events with organizationId
   useEffect(() => {
@@ -306,7 +267,69 @@ export const HomeScreen = () => {
     fetchOrgNames();
   }, [events]);
 
-  if (loading) {
+  // When displaying the scanned today count, use:
+  const scannedToday = events.length > 0 ? events.length : 0;
+
+  // Handler for when "Scan IDs" is pressed
+  const handleScanPress = () => {
+    if (!isNavigationReady) return;
+    
+    if (events.length === 0) {
+      // No events exist, prompt to create one first
+      Alert.alert(
+        'No Events Found',
+        'You need to create an event before scanning IDs. Would you like to create an event now?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Create Event', 
+            onPress: () => navigation.navigate('CreateLocalEvent')
+          }
+        ]
+      );
+    } else if (events.length === 1) {
+      // Only one event exists, use it automatically
+      navigation.navigate('IDScanner', { eventId: events[0].id });
+    } else {
+      // Multiple events exist, show event list for selection
+      navigation.navigate('EventList');
+    }
+  };
+
+  const { importNoGoList } = useNoGoList();
+
+  console.log('HomeScreen - Events from context:', events.length);
+  console.log('HomeScreen - Local events:', events.filter(e => !e.organizationId).length);
+  console.log('HomeScreen - Organization events:', events.filter(e => e.organizationId).length);
+
+  // Log organization IDs to verify they match user's organizations
+  console.log('Organization events details:', events.filter(e => e.organizationId).map(e => ({
+    id: e.id,
+    name: e.name,
+    organizationId: e.organizationId
+  })));
+
+  useEffect(() => {
+    if (events.length > 0) {
+      console.log('HomeScreen - Events breakdown:');
+      console.log('Total events:', events.length);
+      
+      // Group events by organizationId
+      const eventsByOrg = events.reduce((acc, event) => {
+        const orgId = event.organizationId || 'personal';
+        if (!acc[orgId]) acc[orgId] = [];
+        acc[orgId].push(event);
+        return acc;
+      }, {} as Record<string, Event[]>);
+      
+      // Log counts by organization
+      Object.entries(eventsByOrg).forEach(([orgId, orgEvents]) => {
+        console.log(`${orgId === 'personal' ? 'Personal' : `Organization ${orgId}`} events: ${orgEvents.length}`);
+      });
+    }
+  }, [events]);
+
+  if (loading && !refreshing) {
     return (
       <View style={[styles.container]}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -325,10 +348,7 @@ export const HomeScreen = () => {
         </Text>
         <TouchableOpacity
           style={styles.retryButton}
-          onPress={() => navigation.reset({
-            index: 0,
-            routes: [{ name: 'Home' }],
-          })}
+          onPress={onRefresh}
         >
           <Text style={styles.retryButtonText}>Retry</Text>
         </TouchableOpacity>
@@ -386,11 +406,11 @@ export const HomeScreen = () => {
           <View style={styles.header}>
             <View style={styles.headerContent}>
               <View>
-                <Text style={styles.greeting}>VerifyU</Text>
+                <Text style={styles.greeting}>{greeting}, {user?.displayName || 'User'}</Text>
                 <Text style={styles.subGreeting}>Closed Beta</Text>
               </View>
-              <TouchableOpacity style={styles.profileButton}>
-                <Ionicons name="person-circle" size={40} color={COLORS.primary} />
+              <TouchableOpacity style={styles.profileButton} onPress={() => navigation.navigate('Profile')}>
+                <Ionicons name="person-circle-outline" size={32} color={COLORS.primary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -400,6 +420,14 @@ export const HomeScreen = () => {
             style={styles.scrollView}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.contentContainer}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[COLORS.primary]}
+                tintColor={COLORS.primary}
+              />
+            }
           >
             {/* Next Up Event Section */}
             <View style={styles.sectionContainer}>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   SafeAreaView,
   StatusBar,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -16,6 +18,7 @@ import { getCurrentUser, getOrganizationEvents } from '../services/firebase';
 import { format } from 'date-fns';
 import { RootStackParamList } from '../types/navigation';
 import { Ionicons } from '@expo/vector-icons';
+import { getEventEmoji } from '../utils/emojiUtils';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -25,23 +28,36 @@ const OrganizationDetailsScreen = () => {
   const { organization } = route.params as { organization: Organization };
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const currentUser = getCurrentUser();
   const isAdmin = organization.admins.includes(currentUser?.uid || '');
 
-  useEffect(() => {
-    const loadEvents = async () => {
-      try {
-        setLoading(true);
-        const orgEvents = await getOrganizationEvents(organization.id);
-        setEvents(orgEvents);
-      } catch (error) {
-        console.error('Error loading events:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadEvents();
+  // Function to load organization events
+  const loadEvents = useCallback(async () => {
+    try {
+      const orgEvents = await getOrganizationEvents(organization.id);
+      setEvents(orgEvents);
+    } catch (error) {
+      console.error('Error loading events:', error);
+    }
   }, [organization.id]);
+
+  // Initial load
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      await loadEvents();
+      setLoading(false);
+    };
+    fetchData();
+  }, [loadEvents]);
+
+  // Handle refresh
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadEvents();
+    setRefreshing(false);
+  }, [loadEvents]);
 
   const renderEventItem = ({ item }: { item: Event }) => (
     <View style={styles.eventCard}>
@@ -49,7 +65,7 @@ const OrganizationDetailsScreen = () => {
         <View style={styles.eventCardHeader}>
           <View style={styles.eventNameContainer}>
             <View style={styles.emojiContainer}>
-              <Text style={styles.emojiText}>📅</Text>
+              <Text style={styles.emojiText}>{getEventEmoji(item)}</Text>
             </View>
             <Text style={styles.eventName}>{item.name}</Text>
           </View>
@@ -114,36 +130,44 @@ const OrganizationDetailsScreen = () => {
         )}
       </View>
 
-      <FlatList
-        data={events}
-        renderItem={renderEventItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.eventsList}
-        refreshing={loading}
-        onRefresh={() => {
-          setLoading(true);
-          getOrganizationEvents(organization.id)
-            .then(setEvents)
-            .finally(() => setLoading(false));
-        }}
-        ListEmptyComponent={() => (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="calendar-outline" size={80} color={COLORS.grayLight} />
-            <Text style={styles.emptyTitle}>No Events Found</Text>
-            <Text style={styles.emptyText}>
-              This organization hasn't created any events yet.
-            </Text>
-            {isAdmin && (
-              <TouchableOpacity 
-                style={styles.createButton}
-                onPress={() => navigation.navigate('CreateEvent', { organization: organization })}
-              >
-                <Text style={styles.createButtonText}>Create New Event</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-      />
+      {loading && !refreshing ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading events...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={events}
+          renderItem={renderEventItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.eventsList}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={[COLORS.primary]}
+              tintColor={COLORS.primary}
+            />
+          }
+          ListEmptyComponent={() => (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="calendar-outline" size={80} color={COLORS.grayLight} />
+              <Text style={styles.emptyTitle}>No Events Found</Text>
+              <Text style={styles.emptyText}>
+                This organization hasn't created any events yet.
+              </Text>
+              {isAdmin && (
+                <TouchableOpacity 
+                  style={styles.createButton}
+                  onPress={() => navigation.navigate('CreateEvent', { organization: organization })}
+                >
+                  <Text style={styles.createButtonText}>Create New Event</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -297,6 +321,16 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: '600',
     fontSize: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: COLORS.textLight,
   },
 });
 

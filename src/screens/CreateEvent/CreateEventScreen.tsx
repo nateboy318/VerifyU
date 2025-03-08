@@ -20,6 +20,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { suggestEmojis, popularEmojis } from '../../utils/emojiUtils';
 import { Organization } from '../../types/organization';
 import { getCurrentUser, createEvent } from '../../services/firebase';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 
 // Helper functions for date formatting
 const formatDate = (date: Date): string => {
@@ -105,6 +107,10 @@ export const CreateEventScreen = () => {
   
   // Emoji picker state
   const [currentEmojiCategory, setCurrentEmojiCategory] = useState("Frequent");
+  
+  // No-go list state
+  const [noGoList, setNoGoList] = useState<string[]>([]);
+  const [noGoListFileName, setNoGoListFileName] = useState<string | null>(null);
   
   // Update suggested emojis when event name changes
   useEffect(() => {
@@ -205,6 +211,31 @@ export const CreateEventScreen = () => {
     return true;
   };
 
+  const importNoGoList = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'text/csv',
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const fileUri = result.assets[0].uri;
+      const fileName = result.assets[0].name;
+      const fileContent = await FileSystem.readAsStringAsync(fileUri);
+      const names = fileContent.split('\n').map(name => name.trim()).filter(name => name.length > 0);
+      
+      setNoGoList(names);
+      setNoGoListFileName(fileName);
+      
+      Alert.alert('Success', `Imported ${names.length} names to the event no-go list`);
+    } catch (error) {
+      console.error('Error importing event no-go list:', error);
+      Alert.alert('Error', 'Failed to import no-go list');
+    }
+  };
+
   const handleCreateEvent = async (): Promise<void> => {
     if (!validateForm()) return;
     
@@ -223,9 +254,11 @@ export const CreateEventScreen = () => {
         name: eventName.trim(),
         location: eventLocation.trim() || undefined,
         startDate: eventDateTime.toISOString(),
-        endDate: eventDateTime.toISOString(), // You might want to add end date picker
+        endDate: eventDateTime.toISOString(),
         description: eventDescription.trim() || undefined,
-        isActive: true
+        isActive: true,
+        emoji: selectedEmoji,
+        noGoList: noGoList.length > 0 ? noGoList : undefined
       };
 
       const createdEvent = await createEvent(newEventData, currentUser.uid, organization.id);
@@ -442,6 +475,37 @@ export const CreateEventScreen = () => {
                     placeholderTextColor={COLORS.textLight}
                   />
                 </View>
+              </View>
+            </View>
+            
+            {/* No-Go List */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>No-Go List (Optional)</Text>
+              <View style={styles.noGoListContainer}>
+                {noGoListFileName ? (
+                  <View style={styles.fileInfoContainer}>
+                    <Ionicons name="document-text-outline" size={24} color={COLORS.primary} />
+                    <Text style={styles.fileNameText}>{noGoListFileName}</Text>
+                    <Text style={styles.fileCountText}>({noGoList.length} names)</Text>
+                    <TouchableOpacity 
+                      style={styles.removeFileButton}
+                      onPress={() => {
+                        setNoGoList([]);
+                        setNoGoListFileName(null);
+                      }}
+                    >
+                      <Ionicons name="close-circle" size={20} color={COLORS.danger} />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity 
+                    style={styles.importButton}
+                    onPress={importNoGoList}
+                  >
+                    <Ionicons name="cloud-upload-outline" size={24} color={COLORS.primary} />
+                    <Text style={styles.importButtonText}>Import CSV No-Go List</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
             
@@ -1068,5 +1132,50 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: '600',
     fontSize: 16,
+  },
+  formGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.text,
+    marginBottom: 8,
+  },
+  noGoListContainer: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: COLORS.grayLight,
+    borderRadius: 8,
+    padding: 12,
+  },
+  importButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+  },
+  importButtonText: {
+    marginLeft: 8,
+    color: COLORS.primary,
+    fontSize: 16,
+  },
+  fileInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  fileNameText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: COLORS.text,
+    flex: 1,
+  },
+  fileCountText: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    marginRight: 8,
+  },
+  removeFileButton: {
+    padding: 4,
   },
 }); 

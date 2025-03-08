@@ -47,7 +47,7 @@ export const AuthScreen = () => {
         style={styles.container}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>VerifyU</Text>
+          <Text style={styles.title}>AttendIt</Text>
           <Text style={styles.subtitle}>
             {isSignUp ? 'Create an account' : 'Welcome back'}
           </Text>

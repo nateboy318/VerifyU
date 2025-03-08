@@ -53,9 +53,17 @@ export const popularEmojis = [
 
 // Function to get emoji based on event name or return custom emoji if set
 export const getEventEmoji = (event: any): string => {
+    // Log for debugging
+    console.log('Event emoji data:', event.emoji);
+    
     // If event has a custom emoji, use it
-    if (event.emoji) {
+    if (event && event.emoji) {
         return event.emoji;
+    }
+    
+    // If there's no event object or it's incomplete
+    if (!event || !event.name) {
+        return '📅'; // Default calendar emoji
     }
 
     // Otherwise generate one based on name

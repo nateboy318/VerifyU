@@ -10,7 +10,7 @@ import { SaveFormat } from 'expo-image-manipulator';
 import { Ionicons } from '@expo/vector-icons';
 import { Student } from '../../types';
 import { VisionService } from '../../services/VisionService';
-import { markAttendance, getCurrentUser } from '../../services/firebase';
+import { markAttendance, getCurrentUser, getEventDetails } from '../../services/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Screen dimensions
@@ -218,11 +218,23 @@ export const IDScannerScreen = () => {
         return;
       }
 
-      // Check if the person is on the no-go list
-      if (isOnNoGoList(name)) {
+      // Get the event details to access its no-go list
+      const eventDetails = await getEventDetails(eventId);
+      const eventNoGoList = eventDetails?.event?.noGoList || [];
+
+      // Check if the person is on the event's no-go list
+      const isOnEventNoGoList = eventNoGoList.some(
+        noGoName => noGoName.toLowerCase() === name.toLowerCase().trim()
+      );
+
+      // Check if the person is on the global no-go list (as a fallback)
+      const isOnGlobalNoGoList = isOnNoGoList(name);
+
+      if (isOnEventNoGoList || isOnGlobalNoGoList) {
+        const listType = isOnEventNoGoList ? "event's" : "global";
         Alert.alert(
           '⚠️ NO ENTRY',
-          `${name} is on the no-go list and should not be admitted.`,
+          `${name} is on the ${listType} no-go list and should not be admitted.`,
           [
             { 
               text: 'OK', 
