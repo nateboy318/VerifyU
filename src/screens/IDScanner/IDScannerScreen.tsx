@@ -324,7 +324,12 @@ export const IDScannerScreen = () => {
   };
 
   const toggleTorch = () => {
-    setTorchMode((prevMode) => !prevMode);
+    // Update UI immediately
+    const newTorchMode = !torchMode;
+    setTorchMode(newTorchMode);
+    
+    // Log for debugging
+    console.log('Setting torch mode to:', newTorchMode);
   };
 
   return (
@@ -402,10 +407,17 @@ export const IDScannerScreen = () => {
           
 
           <TouchableOpacity 
-            style={styles.helpButton}
+            style={[
+              styles.helpButton,
+              torchMode && { backgroundColor: '#009CDF' }
+            ]}
             onPress={toggleTorch}
           >
-            <Ionicons name="flashlight-outline" size={22} color={COLORS.white} />
+            <Ionicons 
+              name={torchMode ? "flashlight" : "flashlight-outline"} 
+              size={22} 
+              color={COLORS.white} 
+            />
           </TouchableOpacity>
         </View>
       </CameraView>

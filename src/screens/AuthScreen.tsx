@@ -13,23 +13,17 @@ import {
 } from 'react-native';
 import { COLORS, SIZES, SHADOWS, FONTS } from '../constants/theme';
 import { signIn, signUp, signInWithApple } from '../services/firebase';
-import * as AppleAuthentication from 'expo-apple-authentication';
+import { Ionicons } from '@expo/vector-icons';
+
 
 export const AuthScreen = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
-  const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
 
-  useEffect(() => {
-    const checkAppleAuthAvailable = async () => {
-      const isAvailable = await AppleAuthentication.isAvailableAsync();
-      setAppleAuthAvailable(isAvailable);
-    };
-    
-    checkAppleAuthAvailable();
-  }, []);
+
+
 
   const handleAuth = async () => {
     if (!email || !password) {
@@ -58,6 +52,20 @@ export const AuthScreen = () => {
     } catch (error: any) {
       if (error.code !== 'ERR_CANCELED') {
         Alert.alert('Error', error.message || 'Sign in with Apple failed');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setIsLoading(true);
+      // This is a placeholder - you would need to implement the Google sign-in functionality
+      Alert.alert('Info', 'Google Sign In is not yet implemented');
+    } catch (error: any) {
+      if (error.code !== 'ERR_CANCELED') {
+        Alert.alert('Error', error.message || 'Sign in with Google failed');
       }
     } finally {
       setIsLoading(false);
@@ -121,15 +129,35 @@ export const AuthScreen = () => {
             </Text>
           </TouchableOpacity>
 
-          {appleAuthAvailable && (
-            <AppleAuthentication.AppleAuthenticationButton
-              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-              cornerRadius={8}
-              style={styles.appleButton}
+          <View style={styles.dividerContainer}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or sign in with</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <View style={styles.socialButtonsContainer}>
+            <TouchableOpacity
+              style={[styles.socialButton, styles.googleButton]}
+              onPress={handleGoogleSignIn}
+              disabled={isLoading}
+            >
+              <View style={styles.socialButtonContent}>
+                <Ionicons name="logo-google" size={20} color="#000" style={styles.socialIcon} />
+                <Text style={styles.socialButtonText}>Google</Text>
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.socialButton, styles.appleButton]}
               onPress={handleAppleSignIn}
-            />
-          )}
+              disabled={isLoading}
+            >
+              <View style={styles.socialButtonContent}>
+                <Ionicons name="logo-apple" size={22} color={COLORS.white} style={styles.socialIcon} />
+                <Text style={[styles.socialButtonText, styles.appleButtonText]}>Apple</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -144,16 +172,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: SIZES.padding,
-    justifyContent: 'center',
+    marginTop: 120,
   },
   header: {
     alignItems: 'center',
     marginBottom: 48,
   },
   title: {
-    fontSize: 32,
+    fontSize: 48,
     fontFamily: FONTS.bold,
     color: COLORS.primary,
+    fontWeight: 'bold',
     marginBottom: 8,
   },
   subtitle: {
@@ -200,8 +229,58 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.medium,
   },
   appleButton: {
-    width: '100%',
-    height: 48,
-    marginTop: 16,
+    backgroundColor: '#000',
+    marginLeft: 8,
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 60,
+    marginBottom: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.grayLight,
+  },
+  dividerText: {
+    marginHorizontal: 10,
+    color: COLORS.textLight,
+    fontSize: 14,
+    fontFamily: FONTS.medium,
+  },
+  socialButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  socialButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOWS.light,
+  },
+  googleButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: COLORS.grayLight,
+    marginRight: 8,
+  },
+  socialButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  socialIcon: {
+    marginRight: 8,
+  },
+  socialButtonText: {
+    fontSize: 16,
+    fontFamily: FONTS.medium,
+    color: COLORS.text,
+  },
+  appleButtonText: {
+    color: COLORS.white,
   },
 }); 

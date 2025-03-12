@@ -2,6 +2,7 @@ import * as FileSystem from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Student } from '../types';
 import nlp from 'compromise';
+import * as tf from '@tensorflow/tfjs';
 
 // Import credentials
 const credentials = require('../../google_creds.json');
@@ -23,6 +24,15 @@ const COMMON_TITLES = ['student', 'id', 'card', 'university', 'college', 'school
 const NAME_INDICATORS = ['name:', 'student:', 'student name:'];
 const ID_INDICATORS = ['id:', 'id#:', 'student id:', 'number:'];
 
+// Common name indicators with different formats
+const NAME_PATTERNS = [
+    /^[A-Z][a-z]+ [A-Z][a-z]+$/,                       // First Last
+    /^[A-Z][a-z]+ [A-Z]\.? [A-Z][a-z]+$/,             // First M. Last
+    /Name:\s*([A-Z][a-z]+(?: [A-Z][a-z]+)+)/i,        // Name: First Last
+    /Student:\s*([A-Z][a-z]+(?: [A-Z][a-z]+)+)/i,     // Student: First Last
+    /([A-Z][a-z]+),\s([A-Z][a-z]+)/,                  // Last, First
+];
+
 // Helper functions outside the class
 async function readFile(path: string) {
     const content = await FileSystem.readAsStringAsync(path);
@@ -40,41 +50,43 @@ async function fileExists(path: string) {
 export class VisionService {
     private static readonly API_KEY = 'AIzaSyDhdKl9outmUUPrDGgbtChye0nmMNFe4fA';
     private static readonly API_URL = 'https://vision.googleapis.com/v1/images:annotate';
+    private static model: tf.GraphModel | null = null;
 
     private static analyzeNameCandidates(blocks: string[]): NameCandidate[] {
         const candidates: NameCandidate[] = [];
         
-        for (const text of blocks) {
-            const line = text.trim();
-            if (!line || line.length < 4 || line.length > 50) continue;
+        for (let i = 0; i < blocks.length; i++) {
+            const text = blocks[i].trim();
+            if (!text || text.length < 4 || text.length > 50) continue;
             
             let confidence = 0;
-            const doc = nlp(line);
+            const doc = nlp(text);
             
-            // Use compromise's built-in person detection
-            // Note: This is less accurate than using a dedicated plugin but works without additional dependencies
-            const hasPersonName = doc.match('#Person').found || doc.match('#FirstName #LastName').found;
-            if (hasPersonName) confidence += 0.5;
+            // Enhanced NER with compromise
+            const people = doc.people();
+            if (people.found) {
+                // If compromise specifically identified this as a person
+                confidence += 0.6;
+                
+                // Even more confident if it found a full name pattern
+                if (doc.match('(#FirstName|#GivenName) (#LastName|#Surname)').found) {
+                    confidence += 0.2;
+                }
+            }
             
             // Advanced name pattern matching (common in IDs)
-            const namePatterns = [
-                /^[A-Z][a-z]+ [A-Z][a-z]+$/,  // Simple "First Last"
-                /^[A-Z][a-z]+ [A-Z]\.? [A-Z][a-z]+$/,  // With middle initial
-                /Name:\s*([A-Z][a-z]+(?: [A-Z][a-z]+)+)/i  // With "Name:" prefix
-            ];
-            
-            if (namePatterns.some(pattern => pattern.test(line))) {
+            if (NAME_PATTERNS.some(pattern => pattern.test(text))) {
                 confidence += 0.4;
             }
             
             // Check for name indicators
             if (NAME_INDICATORS.some(indicator => 
-                line.toLowerCase().includes(indicator))) {
+                text.toLowerCase().includes(indicator))) {
                 confidence += 0.4;
             }
             
             // Check proper case formatting
-            const words = line.split(' ');
+            const words = text.split(' ');
             const isProperCase = words.every(word => 
                 word.length > 0 && 
                 word[0] === word[0].toUpperCase() && 
@@ -89,9 +101,19 @@ export class VisionService {
             if (words.length >= 2 && words.length <= 3) confidence += 0.2;
             
             // Check for only letters and basic punctuation
-            if (!/[^A-Za-z\s\.-]/.test(line)) confidence += 0.2;
+            if (!/[^A-Za-z\s\.-]/.test(text)) confidence += 0.2;
             
-            candidates.push({ text: line, confidence });
+            // Check text before and after for name indicators
+            const prevLine = i > 0 ? blocks[i-1].toLowerCase().trim() : '';
+            const nextLine = i < blocks.length-1 ? blocks[i+1].toLowerCase().trim() : '';
+
+            // Check if surrounding lines indicate this is a name
+            if (prevLine.includes('name') || prevLine.includes('student') || 
+                nextLine.includes('id') || nextLine.includes('number')) {
+                confidence += 0.3;
+            }
+            
+            candidates.push({ text: text, confidence });
         }
         
         return candidates.sort((a, b) => b.confidence - a.confidence);
@@ -188,7 +210,7 @@ export class VisionService {
             const bestIdMatch = idCandidates[0];
 
             return {
-                id: bestIdMatch || `ID-${Date.now()}`,
+                id: bestIdMatch || "Unknown",
                 name: bestNameMatch || 'Unknown Student',
                 timestamp: new Date()
             };
@@ -196,6 +218,69 @@ export class VisionService {
         } catch (error) {
             console.error('❌ Error processing image:', error);
             throw error;
+        }
+    }
+
+    private static async detectPersonNameWithModel(text: string): Promise<boolean> {
+        try {
+            // Load the model if not already loaded
+            if (!this.model) {
+                // Path to your saved model - could be local or remote
+                const modelPath = 'https://tfhub.dev/tensorflow/tfjs-model/bert_en_uncased_preprocess/3'; // Replace with actual path
+                console.log('Loading NER model...');
+                this.model = await tf.loadGraphModel(modelPath);
+            }
+            
+            // Preprocess text for the model
+            // This will depend on how your model expects input
+            const encodedText = this.encodeText(text);
+            
+            // Make prediction
+            const predictions = await this.model.predict(encodedText);
+            
+            // Process the predictions to determine if it's a person's name
+            // This will depend on your model's output format
+            const hasPerson = this.processPredictions(predictions);
+            
+            return hasPerson;
+        } catch (error) {
+            console.error('Error in NER model:', error);
+            return false; // Fallback to false on error
+        }
+    }
+    
+    // Helper method to encode text for the model
+    private static encodeText(text: string): tf.Tensor {
+        // This is a placeholder - actual implementation depends on your model
+        // For example, you might need to tokenize the text and convert to tensors
+        
+        // Simple example - convert to lowercase and split into words
+        const words = text.toLowerCase().split(/\s+/);
+        
+        // Create a tensor - this is just an example
+        // In reality, you would use a tokenizer specific to your model
+        return tf.tensor([words.map(w => w.length)]); 
+    }
+    
+    // Helper method to process model predictions
+    private static processPredictions(predictions: tf.Tensor | tf.Tensor[] | tf.NamedTensorMap): boolean {
+        // Handle NamedTensorMap case
+        if (predictions instanceof Object && !(predictions instanceof tf.Tensor) && !Array.isArray(predictions)) {
+            // Use the first tensor in the map
+            const firstTensor = Object.values(predictions)[0] as tf.Tensor;
+            const values = firstTensor.dataSync();
+            return values.some(v => v > 0.5);
+        } 
+        // Handle array of tensors case
+        else if (Array.isArray(predictions)) {
+            const mainPrediction = predictions[0];
+            const values = mainPrediction.dataSync();
+            return values.some(v => v > 0.5);
+        } 
+        // Handle single tensor case
+        else {
+            const values = (predictions as tf.Tensor).dataSync();
+            return values.some(v => v > 0.5);
         }
     }
 } 

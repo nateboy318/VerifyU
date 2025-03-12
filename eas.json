@@ -1,6 +1,31 @@
 {
-    "build": {
-      "production": {}
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      }
+    },
+    "production": {},
+    "beta": {
+      "distribution": "internal",
+      "credentialsSource": "local"
+    }
+  },
+  "submit": {
+    "beta": {
+      "ios": {
+        "ascAppId": "6743124640",
+        "appleTeamId": "5YSFZN83BP"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./path-to-google-service-account.json",
+        "track": "internal"
+      }
     }
   }
-  
+}

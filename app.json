@@ -37,6 +37,10 @@
       "bundleIdentifier": "com.nateroyal1.cardinalscanner",
       "entitlements": {
         "com.apple.developer.applesignin": ["Default"]
+      },
+      "podfile": {
+        "path": "./ios/Podfile.rb",
+        "configuration": "common_configuration"
       }
     },
     "android": {

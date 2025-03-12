@@ -8,6 +8,7 @@ import {
     signOut,
     signInWithCredential,
     OAuthProvider,
+    signInWithCustomToken,
 } from 'firebase/auth';
 
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
@@ -36,6 +37,7 @@ import 'react-native-get-random-values';
 import { Organization, Event, Attendance, User, JoinCodeResponse } from '../types/organization';
 import { COLORS } from '../constants/theme';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import Constants from 'expo-constants';
 
 // Initialize Firebase - you'll need to replace these with your Firebase config
 const firebaseConfig = {
@@ -555,6 +557,10 @@ export const logOut = async (): Promise<void> => {
 };
 
 export const signInWithApple = async (): Promise<FirebaseUser> => {
+  throw new Error('Apple Sign In is temporarily disabled.');
+  
+  // Original implementation is commented out below for future reference
+  /*
   try {
     // First, perform Apple authentication
     const appleCredential = await AppleAuthentication.signInAsync({
@@ -564,37 +570,57 @@ export const signInWithApple = async (): Promise<FirebaseUser> => {
       ],
     });
 
-    // Create an OAuthProvider credential
-    const provider = new OAuthProvider('apple.com');
-    const authCredential = provider.credential({
-      idToken: appleCredential.identityToken || '',
-    });
-
-    // Sign in to Firebase with the Apple OAuth credential
-    const userCredential = await signInWithCredential(auth, authCredential);
+    // Check if we're in development (Expo Go) or production
+    const isDevelopment = Constants.appOwnership === 'expo';
     
-    // If this is a new user, create their document
-    await createUserDocument(userCredential.user);
-    
-    // Check if we need to update the name (Apple only provides it on first sign in)
-    if (appleCredential.fullName && 
-        (appleCredential.fullName.givenName || appleCredential.fullName.familyName)) {
-      const displayName = [
-        appleCredential.fullName.givenName,
-        appleCredential.fullName.familyName
-      ].filter(Boolean).join(' ');
+    if (isDevelopment) {
+      // Development approach: Use a custom Firebase Admin SDK endpoint
+      // You'll need to create a server endpoint for this
+      const response = await fetch('YOUR_SERVER_URL/verifyAppleToken', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          idToken: appleCredential.identityToken,
+        }),
+      });
       
-      if (displayName) {
-        const userRef = doc(usersRef, userCredential.user.uid);
-        await updateDoc(userRef, { displayName });
+      const { customToken } = await response.json();
+      const userCredential = await signInWithCustomToken(auth, customToken);
+      await createUserDocument(userCredential.user);
+      return userCredential.user;
+    } else {
+      // Production approach: Use the existing code
+      const provider = new OAuthProvider('apple.com');
+      const authCredential = provider.credential({
+        idToken: appleCredential.identityToken || '',
+      });
+      
+      const userCredential = await signInWithCredential(auth, authCredential);
+      await createUserDocument(userCredential.user);
+      
+      // The rest of your existing code...
+      if (appleCredential.fullName && 
+          (appleCredential.fullName.givenName || appleCredential.fullName.familyName)) {
+        const displayName = [
+          appleCredential.fullName.givenName,
+          appleCredential.fullName.familyName
+        ].filter(Boolean).join(' ');
+        
+        if (displayName) {
+          const userRef = doc(usersRef, userCredential.user.uid);
+          await updateDoc(userRef, { displayName });
+        }
       }
+      
+      return userCredential.user;
     }
-    
-    return userCredential.user;
   } catch (error) {
     console.error('Error signing in with Apple:', error);
     throw error;
   }
+  */
 };
 
 export { auth, db };
