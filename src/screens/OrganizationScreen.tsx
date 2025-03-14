@@ -11,6 +11,7 @@ import {
   SafeAreaView,
   StyleSheet,
   ScrollView,
+  Share,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -123,6 +124,25 @@ export default function OrganizationScreen() {
     }
   };
 
+  const handleShareCode = async (code: string, name: string) => {
+    try {
+      const message = `🎉 You have been invited to join the ${name} community on AttendIt! \n\n 🔑 To get started Download AttendIt, create an account, and use join code: ${code}`;
+      console.log('Attempting to share:', message);
+      const result = await Share.share({
+        message,
+      });
+
+      if (result.action === Share.sharedAction) {
+        console.log('Share successful');
+      } else if (result.action === Share.dismissedAction) {
+        console.log('Share dismissed');
+      }
+    } catch (error) {
+      console.error('Error sharing code:', error);
+      Alert.alert('Error', 'Failed to share the code');
+    }
+  };
+
   const renderOrganization = ({ item }: { item: Organization }) => (
     <TouchableOpacity
       style={styles.organizationCard}
@@ -142,7 +162,12 @@ export default function OrganizationScreen() {
           )}
           <Text style={styles.joinCode}>Join Code: {item.joinCode}</Text>
         </View>
-        <Ionicons name="chevron-forward" size={20} color={COLORS.grayDark} />
+        <TouchableOpacity
+          style={styles.shareIconButton}
+          onPress={() => handleShareCode(item.joinCode, item.name)}
+        >
+          <Ionicons name="share-outline" size={20} color={COLORS.primary} />
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
@@ -393,6 +418,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textLight,
     marginTop: 2,
+    marginBottom: -15,
   },
   joinCode: {
     fontSize: 12,
@@ -528,5 +554,10 @@ const styles = StyleSheet.create({
   selectedColorOption: {
     borderWidth: 3,
     borderColor: COLORS.black,
+  },
+  shareIconButton: {
+    padding: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 }); 

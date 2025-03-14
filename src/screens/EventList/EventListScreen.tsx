@@ -162,7 +162,11 @@ export const EventListScreen = ({ route }: any) => {
   const renderEventItem = ({ item }: { item: any }) => {
     const isPast = item.startDate ? new Date(item.startDate) < now : false;
     const eventEmoji = getEventEmoji(item);
-    
+    const currentUser = getCurrentUser();
+    const isAdmin = item.organizationId 
+      ? item.organizationId && currentUser && item.organizationAdmins && item.organizationAdmins.includes(currentUser.uid)
+      : item.createdBy === currentUser?.uid;
+
     return (
       <View style={[styles.eventCard, isPast && styles.pastEventCard]}>
         <View style={styles.eventCardContent}>
@@ -208,13 +212,15 @@ export const EventListScreen = ({ route }: any) => {
             <Text style={[styles.actionButtonText, styles.scanButtonText]}>Scan</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.deleteButton]} 
-            onPress={() => handleDeleteEvent(item.id, item.name, item)}
-          >
-            <Ionicons name="trash-outline" size={20} color={COLORS.danger || "#F44336"} />
-            <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete</Text>
-          </TouchableOpacity>
+          {isAdmin && (
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.deleteButton]} 
+              onPress={() => handleDeleteEvent(item.id, item.name, item)}
+            >
+              <Ionicons name="trash-outline" size={20} color={COLORS.danger || "#F44336"} />
+              <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -417,6 +423,8 @@ const styles = StyleSheet.create({
   viewButton: {
     borderRightWidth: 1,
     borderRightColor: 'rgba(0,0,0,0.05)',
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(0,0,0,0.05)',
   },
   viewButtonText: {
     color: COLORS.primary,
@@ -436,6 +444,8 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   deleteButton: {
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(0,0,0,0.05)',
   },
   deleteButtonText: {
     color: COLORS.danger || "#F44336",

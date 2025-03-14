@@ -4,8 +4,6 @@ import { Student } from '../types';
 import nlp from 'compromise';
 import * as tf from '@tensorflow/tfjs';
 
-// Import credentials
-const credentials = require('../../google_creds.json');
 
 // Define type for annotation objects
 interface TextAnnotation {

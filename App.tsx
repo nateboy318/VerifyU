@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Alert } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { RootStackParamList } from './src/types/navigation';
+import { enableScreens } from 'react-native-screens';
 
 // Import providers
 import { EventProvider } from './src/context/EventContext';
@@ -91,6 +92,8 @@ const Navigation = () => {
 
 // App component with providers
 const App = () => {
+  enableScreens();
+
   return (
     <SafeAreaProvider>
       <AuthProvider>

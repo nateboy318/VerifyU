@@ -78,6 +78,18 @@ const emojiCategories = [
 // Add more frequently used emojis
 const frequentEmojis = ["📅", "🎉", "👥", "🛠️", "🎵", "🏆", "🎮", "🍽️", "💼", "🎓", "🎬", "🎭", "✈️", "🏖️", "📚", "🧘", "💪", "🩺", "🏥"];
 
+const getCurrentTimeRoundedToFiveMinutes = () => {
+  const now = new Date();
+  const minutes = Math.round(now.getMinutes() / 5) * 5;
+  now.setMinutes(minutes);
+  return now;
+};
+
+const initialTime = getCurrentTimeRoundedToFiveMinutes();
+const initialHour = initialTime.getHours() % 12 || 12; // Convert to 12-hour format
+const initialMinute = initialTime.getMinutes();
+const initialAmPm = initialTime.getHours() >= 12 ? 'PM' : 'AM';
+
 export const CreateLocalEventScreen = () => {
   const navigation = useNavigation() as any;
   
@@ -92,9 +104,9 @@ export const CreateLocalEventScreen = () => {
   // Date selection states
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [timeHour, setTimeHour] = useState(9);
-  const [timeMinute, setTimeMinute] = useState(0);
-  const [timeAmPm, setTimeAmPm] = useState('AM');
+  const [timeHour, setTimeHour] = useState(initialHour);
+  const [timeMinute, setTimeMinute] = useState(initialMinute);
+  const [timeAmPm, setTimeAmPm] = useState(initialAmPm);
   
   // Calendar view state
   const [calendarViewDate, setCalendarViewDate] = useState<Date>(new Date());
@@ -795,12 +807,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
+    
   },
   datePickerContainer: {
     backgroundColor: COLORS.white,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     padding: 20,
+    height: '90%',
     ...SHADOWS.dark,
   },
   datePickerHeader: {
@@ -821,7 +835,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   calendarGrid: {
-    marginBottom: 16,
+    marginBottom: 0,
   },
   calendarWeekDays: {
     flexDirection: 'row',
@@ -863,7 +877,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: 0,
   },
   timePickerColumn: {
     alignItems: 'center',

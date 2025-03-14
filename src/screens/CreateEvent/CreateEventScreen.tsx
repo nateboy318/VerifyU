@@ -80,6 +80,18 @@ const emojiCategories = [
 // Add more frequently used emojis
 const frequentEmojis = ["📅", "🎉", "👥", "��", "🛠️", "🎵", "🏆", "🎮", "🍽️", "💼", "🎓", "🎬", "🎭", "✈️", "🏖️", "📚", "🧘", "💪", "🩺", "🏥"];
 
+const getCurrentTimeRoundedToFiveMinutes = () => {
+  const now = new Date();
+  const minutes = Math.round(now.getMinutes() / 5) * 5;
+  now.setMinutes(minutes);
+  return now;
+};
+
+const initialTime = getCurrentTimeRoundedToFiveMinutes();
+const initialHour = initialTime.getHours() % 12 || 12; // Convert to 12-hour format
+const initialMinute = initialTime.getMinutes();
+const initialAmPm = initialTime.getHours() >= 12 ? 'PM' : 'AM';
+
 export const CreateEventScreen = () => {
   const navigation = useNavigation() as any;
   const route = useRoute();
@@ -97,9 +109,9 @@ export const CreateEventScreen = () => {
   // Date selection states
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [timeHour, setTimeHour] = useState(9);
-  const [timeMinute, setTimeMinute] = useState(0);
-  const [timeAmPm, setTimeAmPm] = useState('AM');
+  const [timeHour, setTimeHour] = useState(initialHour);
+  const [timeMinute, setTimeMinute] = useState(initialMinute);
+  const [timeAmPm, setTimeAmPm] = useState(initialAmPm);
   
   // Calendar view state
   const [calendarViewDate, setCalendarViewDate] = useState<Date>(new Date());

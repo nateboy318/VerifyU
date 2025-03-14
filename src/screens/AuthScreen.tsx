@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
+  Image
 } from 'react-native';
 import { COLORS, SIZES, SHADOWS, FONTS } from '../constants/theme';
 import { signIn, signUp, signInWithApple } from '../services/firebase';
@@ -79,10 +80,13 @@ export const AuthScreen = () => {
         style={styles.container}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>AttendIt</Text>
-          <Text style={styles.subtitle}>
+          <View style={styles.titleContainer}>
+            <Image source={require('../../assets/icon.png')} style={styles.icon} />
+            <Text style={styles.title}>AttendIt</Text>
+          </View>
+          {/* <Text style={styles.subtitle}>
             {isSignUp ? 'Create an account' : 'Welcome back'}
-          </Text>
+          </Text> */}
         </View>
 
         <View style={styles.form}>
@@ -178,12 +182,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 48,
   },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  icon: {
+    width: 54,
+    height: 54,
+    marginRight: 8,
+  },
   title: {
     fontSize: 48,
     fontFamily: FONTS.bold,
     color: COLORS.primary,
     fontWeight: 'bold',
-    marginBottom: 8,
   },
   subtitle: {
     fontSize: 18,

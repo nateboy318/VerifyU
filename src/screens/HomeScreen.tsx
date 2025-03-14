@@ -25,6 +25,7 @@ import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/fire
 import { Organization, Event } from '../types/organization';
 import { useAuth } from '../context/AuthContext';
 
+
 // Helper function to format dates to mm/dd/yy x:xxpm/am
 const formatDate = (dateString: string | undefined): string => {
   if (!dateString) return 'No date specified';
@@ -180,7 +181,9 @@ const HorizontalEventCard = ({ title, time, icon, color, onPress, event, isLocal
 const SpecialistBox = ({ title, count, icon, color, onPress }: SpecialistBoxProps) => (
   <TouchableOpacity style={styles.specialistBox} onPress={onPress}>
     <View style={styles.specialistContent}>
-      <Text style={styles.specialistCount}>{count} {count === 1 ? 'event' : 'events'}</Text>
+      <Text style={styles.specialistCount}>
+        {count} {title === "Organizations" ? (count === 1 ? 'organization' : 'organizations') : (count === 1 ? 'event' : 'events')}
+      </Text>
       <Text style={styles.specialistTitle}>{title}</Text>
     </View>
     <View style={[styles.specialistIcon, { backgroundColor: color }]}>
@@ -422,11 +425,11 @@ export const HomeScreen = () => {
           <View style={styles.header}>
             <View style={styles.headerContent}>
               <View>
-                <Text style={styles.greeting}>{greeting}, {user?.displayName || 'User'}</Text>
+                <Text style={styles.greeting}>{greeting}</Text>
                 <Text style={styles.subGreeting}>Closed Beta</Text>
               </View>
               <TouchableOpacity style={styles.profileButton} onPress={() => navigation.navigate('Profile')}>
-                <Ionicons name="person-circle-outline" size={32} color={COLORS.primary} />
+              <Image source={require('../../assets/icon.png')} style={styles.logo} />
               </TouchableOpacity>
             </View>
           </View>
@@ -561,7 +564,7 @@ export const HomeScreen = () => {
               {upcomingEvents.length > 0 ? (
                 <>
                   {/* Local Events */}
-                  {localEvents.length > 0 && (
+                  {localEvents.length > 0 && localEvents.some(event => new Date(event.startDate) >= now) && (
                     <View style={styles.eventCategoryContainer}>
                       <Text style={styles.eventCategoryTitle}>Personal Events</Text>
                       {localEvents
@@ -1129,5 +1132,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: COLORS.white,
+  },
+  logo: {
+    width: 32,
+    height: 32,
+    resizeMode: 'contain',
   },
 }); 

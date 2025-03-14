@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "cardinalscanner",
-    "slug": "cardinalscanner",
-    "version": "1.0.0",
+    "name": "AttendIt",
+    "slug": "attendit",
+    "version": "1.0.1",
     "web": {
       "favicon": "./assets/favicon.png"
     },
@@ -13,7 +13,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Cardinal Scanner to access your camera to scan student IDs."
+          "cameraPermission": "Allow AttendIt to access your camera to scan student IDs."
         }
       ]
     ],
@@ -31,17 +31,10 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "Cardinal Scanner uses the camera to scan student IDs for attendance tracking.",
+        "NSCameraUsageDescription": "AttendIt uses the camera to scan student IDs for attendance tracking.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.nateroyal1.cardinalscanner",
-      "entitlements": {
-        "com.apple.developer.applesignin": ["Default"]
-      },
-      "podfile": {
-        "path": "./ios/Podfile.rb",
-        "configuration": "common_configuration"
-      }
+      "bundleIdentifier": "com.nateroyal1.cardinalscanner"
     },
     "android": {
       "adaptiveIcon": {
