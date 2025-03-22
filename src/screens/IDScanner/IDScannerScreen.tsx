@@ -12,6 +12,7 @@ import { Student } from '../../types';
 import { VisionService } from '../../services/VisionService';
 import { markAttendance, getCurrentUser, getEventDetails } from '../../services/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { runOnJS } from 'react-native-reanimated';
 
 // Screen dimensions
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -73,15 +74,15 @@ export const IDScannerScreen = () => {
 
   // Function to calculate crop coordinates based on the card guide dimensions
   const calculateCropCoordinates = (photoWidth: number, photoHeight: number) => {
-    // Calculate the position of the card guide in the camera view
-    const cardGuideTop = SCREEN_HEIGHT * 0.4;
+    // Calculate center of the screen for the card guide
+    const cardGuideTop = (SCREEN_HEIGHT - CARD_HEIGHT) / 2;
     const cardGuideLeft = (SCREEN_WIDTH - CARD_WIDTH) / 2;
     
     // Calculate the scaling factor between photo dimensions and screen dimensions
     const scaleX = photoWidth / SCREEN_WIDTH;
     const scaleY = photoHeight / SCREEN_HEIGHT;
     
-    // Calculate crop region (x, y, width, height)
+    // Calculate crop region
     const cropX = Math.floor(cardGuideLeft * scaleX);
     const cropY = Math.floor(cardGuideTop * scaleY);
     const cropWidth = Math.floor(CARD_WIDTH * scaleX);
@@ -101,10 +102,18 @@ export const IDScannerScreen = () => {
   const performOCR = async (imageUri: string): Promise<Partial<Student>> => {
     try {
       console.log('🔍 Processing image with OCR via VisionService...');
-      return await VisionService.processImage(imageUri);
+      const result = await VisionService.processImage(imageUri);
+      
+      // Ensure we return an object with no nil values
+      return {
+        id: result.id || '',
+        name: result.name || '',
+        // Add other properties with default values
+      };
     } catch (error) {
       console.error('❌ OCR failed:', error);
-      throw error;
+      // Return default values instead of throwing
+      return { id: '', name: '' };
     }
   };
 
@@ -206,9 +215,10 @@ export const IDScannerScreen = () => {
       setOcrProgress('Processing information...');
       console.log('OCR Result:', JSON.stringify(result));
 
-      // Extract student info from OCR
-      const { id, name } = result;
-      const finalImagePath = result.imagePath || croppedPhoto || undefined;
+      // Extract student info from OCR and provide defaults
+      const id = result.id || '';
+      const name = result.name || '';
+      const finalImagePath = result.imagePath || croppedPhoto || undefined;  // Use undefined, not null
       console.log('Extracted:', { id, name, imagePath: finalImagePath });
 
       if (!id || !name) {
@@ -276,12 +286,12 @@ export const IDScannerScreen = () => {
             onPress: async () => {
               try {
                 await markAttendance(
-                  eventId,
-                  id,
-                  currentUser.uid,
+                  eventId || '',
+                  id || '',
+                  currentUser?.uid || '',
                   'present',
-                  `Name: ${name}`,
-                  finalImagePath
+                  `Name: ${name || 'Unknown'}`,
+                  finalImagePath || undefined
                 );
                 
                 // Show success message
@@ -359,8 +369,7 @@ export const IDScannerScreen = () => {
         
         {/* Overlay for ID card alignment */}
         <View style={styles.overlay}>
-          <View style={styles.overlayRow}>
-            <View style={styles.overlaySection} />
+          <View style={styles.cardGuideContainer}>
             <View style={styles.cardGuide}>
               <View style={[styles.cardCorner1, { top: 0, left: 0 }]} />
               <View style={[styles.cardCorner2, { top: 0, right: 0 }]} />
@@ -368,7 +377,6 @@ export const IDScannerScreen = () => {
               <View style={[styles.cardCorner4, { bottom: 0, right: 0 }]} />
             </View>
             <Text style={styles.alignText}>Align with ID</Text>
-            <View style={styles.overlaySection} />
           </View>
         </View>
 
@@ -500,18 +508,18 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingTop: SCREEN_HEIGHT * 0.3,
   },
-  overlayRow: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  overlaySection: {
-    flex: 1,
+  cardGuideContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 60,
   },
   cardGuide: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
-    marginTop: SCREEN_HEIGHT * 0.4,
     position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
@@ -552,15 +560,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomRightRadius: 5,
   },
-  guideText: {
+  alignText: {
     color: COLORS.white,
-    fontSize: 14,
+    fontSize: 18,
+    fontWeight: 'bold',
     textAlign: 'center',
     backgroundColor: 'rgba(0,0,0,0.5)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    overflow: 'hidden',
+    marginTop: -64,
   },
   progressContainer: {
     position: 'absolute',
@@ -647,19 +656,5 @@ const styles = StyleSheet.create({
   torchButtonText: {
     color: 'white',
     fontSize: 16,
-  },
-  alignText: {
-    position: 'absolute',
-    top: '55%',
-    left: '33%',
-    color: COLORS.white,
-    fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    overflow: 'hidden',
   },
 });

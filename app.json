@@ -1,8 +1,8 @@
 {
   "expo": {
     "name": "AttendIt",
-    "slug": "attendit",
-    "version": "1.0.1",
+    "slug": "cardinalscanner",
+    "version": "1.0.4",
     "web": {
       "favicon": "./assets/favicon.png"
     },
@@ -15,7 +15,8 @@
         {
           "cameraPermission": "Allow AttendIt to access your camera to scan student IDs."
         }
-      ]
+      ],
+      "react-native-vision-camera"
     ],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -32,6 +33,7 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "AttendIt uses the camera to scan student IDs for attendance tracking.",
+        "NSLocationWhenInUseUsageDescription": "AttendIt requires location access to help identify event venues and improve attendance tracking.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.nateroyal1.cardinalscanner"

@@ -1,12 +1,12 @@
 import React, { createContext, useState, useContext, useEffect, ReactNode, useCallback } from 'react';
 import { Student } from '../types';
-import { Event } from '../types/organization';
+import { Attendance, Event } from '../types/organization';
 import { Alert } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { db, eventsRef, usersRef } from '../services/firebase';
 import { collection, query, where, onSnapshot, orderBy, getDoc, doc, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
-import { getCurrentUser, onAuthStateChange, createEvent as createFirebaseEvent } from '../services/firebase';
+import { getCurrentUser, onAuthStateChange, createEvent as createFirebaseEvent, getEventAttendance } from '../services/firebase';
 import { User } from '../types/organization';
 
 // Context types
@@ -20,12 +20,12 @@ export interface EventContextType {
   deleteEvent: (eventId: string) => Promise<void>;
   getEventById: (eventId: string) => Event | undefined;
   addStudentToEvent: (eventId: string, student: Student) => Promise<void>;
-  getAttendanceForEvent: (eventId: string) => Student[];
+  getAttendanceForEvent: (eventId: string) => Promise<Attendance[]>;
   removeStudentFromEvent: (eventId: string, studentId: string) => Promise<void>;
   clearAttendanceForEvent: (eventId: string) => Promise<void>;
   getAttendanceCountForToday: () => number;
-  exportAttendanceToCSV: (eventId: string) => string;
-  downloadCSV: (eventId: string) => Promise<void>;
+  exportAttendanceToCSV: (eventId: string) => Promise<string>;
+  downloadCSV: (eventId: string, attendanceData?: Attendance[]) => Promise<void>;
   createLocalEvent: (eventData: { 
     name: string; 
     location?: string; 
@@ -45,11 +45,11 @@ export const EventContext = createContext<EventContextType>({
   deleteEvent: async () => {},
   getEventById: () => undefined,
   addStudentToEvent: async () => {},
-  getAttendanceForEvent: () => [],
+  getAttendanceForEvent: async () => [],
   removeStudentFromEvent: async () => {},
   clearAttendanceForEvent: async () => {},
   getAttendanceCountForToday: () => 0,
-  exportAttendanceToCSV: () => '',
+  exportAttendanceToCSV: async () => '',
   downloadCSV: async () => {},
   createLocalEvent: async () => {},
 });
@@ -236,9 +236,14 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // Get attendance for a specific event
-  const getAttendanceForEvent = (eventId: string): Student[] => {
-    const event = events.find((e) => e.id === eventId);
-    return event?.attendees || [];
+  const getAttendanceForEvent = async (eventId: string): Promise<Attendance[]> => {
+    try {
+      // Get attendance data from Firestore
+      return await getEventAttendance(eventId);
+    } catch (error) {
+      console.error('Error fetching attendance:', error);
+      return [];
+    }
   };
 
   // Remove a student from an event's attendance
@@ -285,33 +290,87 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // Export attendance to CSV
-  const exportAttendanceToCSV = (eventId: string): string => {
+  const exportAttendanceToCSV = async (eventId: string): Promise<string> => {
     const event = events.find(event => event.id === eventId);
-    if (!event?.attendees) {
+    if (!event) {
       return '';
     }
 
-    const csvRows = [
-      ['ID', 'Name', 'Timestamp'], // Header row
-      ...event.attendees.map(student => [student.id, student.name, student.timestamp.toISOString()]) // Data rows
-    ];
-
-    return csvRows.map(row => row.join(',')).join('\n');
+    // Format date and time for CSV header
+    const eventDate = event.startDate ? new Date(event.startDate) : new Date();
+    const dateString = eventDate.toLocaleDateString();
+    const timeString = eventDate.toLocaleTimeString();
+    
+    // Create CSV header with event information
+    const csvHeader = [
+      `Event: ${event.name}`,
+      `Date: ${dateString}`,
+      `Time: ${timeString}`,
+      `Location: ${event.location || 'N/A'}`,
+      '',  // Empty line for spacing
+      'Student ID,Name,Check-in Time,Status'  // Added Name column
+    ].join('\n');
+    
+    // Get attendance data - use await here
+    const attendanceData = await getAttendanceForEvent(eventId);
+    
+    if (!attendanceData || attendanceData.length === 0) {
+      return csvHeader + '\nNo attendance data available.';
+    }
+    
+    // Format attendance data rows
+    const csvRows = attendanceData.map((student) => {
+      // Extract the name from notes
+      const name = student.notes?.split('Name: ')[1] || 'Unknown Student';
+      
+      // Convert the timestamp to a Date object and then to a string
+      const timestamp = new Date(student.timestamp).toLocaleString();
+      
+      // Include the name in the CSV row
+      return `${student.userId},${name},${timestamp},${student.status || 'present'}`;
+    }).join('\n');
+    
+    return csvHeader + '\n' + csvRows;
   };
 
   // Download CSV
-  const downloadCSV = async (eventId: string): Promise<void> => {
-    const csvData = exportAttendanceToCSV(eventId);
-    if (csvData) {
-      const fileUri = FileSystem.documentDirectory + `attendance_${eventId}.csv`;
-      await FileSystem.writeAsStringAsync(fileUri, csvData, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
+  const downloadCSV = async (eventId: string, attendanceData?: Attendance[]): Promise<void> => {
+    try {
+      const event = events.find(e => e.id === eventId);
+      if (!event) {
+        Alert.alert('Error', 'Event not found');
+        return;
+      }
+      
+      // Use the passed attendance data if available
+      let attendance = attendanceData || [];
+      
+      // If no data was passed, fetch it
+      if (!attendance || attendance.length === 0) {
+        attendance = await getAttendanceForEvent(eventId);
+      }
+      
+      if (!attendance || attendance.length === 0) {
+        Alert.alert('No Data', 'There is no attendance data to export');
+        return;
+      }
+      
+      // Rest of the function remains the same
+      const csvData = await exportAttendanceToCSV(eventId);
+      if (csvData) {
+        const fileUri = FileSystem.documentDirectory + `attendance_${eventId}.csv`;
+        await FileSystem.writeAsStringAsync(fileUri, csvData, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
 
-      // Share the file using Expo's Sharing API
-      await Sharing.shareAsync(fileUri);
-    } else {
-      Alert.alert('No attendance data found for this event.');
+        // Share the file using Expo's Sharing API
+        await Sharing.shareAsync(fileUri);
+      } else {
+        Alert.alert('No attendance data found for this event.');
+      }
+    } catch (error) {
+      console.error('Error generating CSV:', error);
+      Alert.alert('Export Failed', 'Failed to export attendance data');
     }
   };
 

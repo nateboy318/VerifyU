@@ -166,7 +166,7 @@ export default function OrganizationScreen() {
           style={styles.shareIconButton}
           onPress={() => handleShareCode(item.joinCode, item.name)}
         >
-          <Ionicons name="share-outline" size={20} color={COLORS.primary} />
+          <Text style={styles.shareIconButtonText}>Share Code</Text><Ionicons name="share-outline" size={20} color={COLORS.white} />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textLight,
     marginTop: 2,
-    marginBottom: -15,
+    marginBottom: 0,
   },
   joinCode: {
     fontSize: 12,
@@ -559,5 +559,18 @@ const styles = StyleSheet.create({
     padding: 8,
     justifyContent: 'center',
     alignItems: 'center',
+    flexDirection: 'row',
+    gap: 4,
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    color: COLORS.white,
+    
+  },
+  shareIconButtonText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: COLORS.white,
   },
 }); 

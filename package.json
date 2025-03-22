@@ -1,6 +1,6 @@
 {
   "name": "attendit",
-  "version": "1.0.1",
+  "version": "1.0.4",
   "scripts": {
     "android": "expo run:android",
     "ios": "expo run:ios",

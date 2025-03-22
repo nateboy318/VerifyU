@@ -40,7 +40,11 @@ export const AuthScreen = () => {
         await signIn(email, password);
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      if (error.code === 'auth/invalid-credential') {
+        Alert.alert('Error', 'These credentials are incorrect. Make sure to sign up first.');
+      } else {
+        Alert.alert('Error', error.message);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -49,7 +53,8 @@ export const AuthScreen = () => {
   const handleAppleSignIn = async () => {
     try {
       setIsLoading(true);
-      await signInWithApple();
+      // This is a placeholder - you would need to implement the Google sign-in functionality
+      Alert.alert('Info', 'Apple Sign In is not yet implemented');
     } catch (error: any) {
       if (error.code !== 'ERR_CANCELED') {
         Alert.alert('Error', error.message || 'Sign in with Apple failed');

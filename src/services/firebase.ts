@@ -11,7 +11,6 @@ import {
     signInWithCustomToken,
 } from 'firebase/auth';
 
-import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import {
     getFirestore,
     collection,
@@ -36,8 +35,8 @@ import { v4 as uuidv4 } from 'uuid';
 import 'react-native-get-random-values';
 import { Organization, Event, Attendance, User, JoinCodeResponse } from '../types/organization';
 import { COLORS } from '../constants/theme';
-import * as AppleAuthentication from 'expo-apple-authentication';
-import Constants from 'expo-constants';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+
 
 // Initialize Firebase - you'll need to replace these with your Firebase config
 const firebaseConfig = {
@@ -67,6 +66,9 @@ if (!firebaseConfig.apiKey) {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// Initialize Firebase Storage
+const storage = getStorage(app);
 
 // Enable Firestore persistence
 enableIndexedDbPersistence(db)
@@ -254,10 +256,20 @@ export const markAttendance = async (
         status,
         notes,
         checkedInBy,
-        imagePath
+        imagePath: undefined // Initialize as undefined
     };
 
     try {
+        // Upload image to Firebase Storage if imagePath is provided
+        if (imagePath) {
+            const response = await fetch(imagePath);
+            const blob = await response.blob();
+            const storageRef = ref(storage, `attendance_images/${attendance.id}.jpg`);
+            await uploadBytes(storageRef, blob);
+            const downloadURL = await getDownloadURL(storageRef);
+            attendance.imagePath = downloadURL; // Set the image URL
+        }
+
         // Add attendance record to the event's attendance subcollection
         const eventAttendanceRef = collection(db, `events/${eventId}/attendance`);
         await setDoc(doc(eventAttendanceRef, attendance.id), attendance);
